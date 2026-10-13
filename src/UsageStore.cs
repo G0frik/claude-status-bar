@@ -22,7 +22,16 @@ public sealed record UsageLimits(UsageWindow? FiveHour, UsageWindow? SevenDay, s
 /// </summary>
 public sealed class UsageStore
 {
-    private static readonly string UsagePath = Path.Combine(StateStore.Dir, "usage.json");
+    private readonly string _usagePath;
+    private readonly Func<double> _now;
+
+    /// <param name="dir">Status-bar data directory; defaults to <see cref="StateStore.Dir"/>.</param>
+    /// <param name="now">Clock in unix seconds; defaults to the system clock.</param>
+    public UsageStore(string? dir = null, Func<double>? now = null)
+    {
+        _usagePath = Path.Combine(dir ?? StateStore.Dir, "usage.json");
+        _now = now ?? StateStore.UnixNow;
+    }
 
     private DateTime _lastWrite = DateTime.MinValue;
     private UsageLimits _current = new(null, null);
@@ -32,7 +41,7 @@ public sealed class UsageStore
     {
         try
         {
-            var info = new FileInfo(UsagePath);
+            var info = new FileInfo(_usagePath);
             if (!info.Exists)
             {
                 _lastWrite = DateTime.MinValue;
@@ -40,7 +49,7 @@ public sealed class UsageStore
             }
             else if (info.LastWriteTimeUtc != _lastWrite)
             {
-                _current = Parse(File.ReadAllText(UsagePath));
+                _current = Parse(SharedFile.ReadAllText(_usagePath));
                 _lastWrite = info.LastWriteTimeUtc; // only after a successful read, so a failed one retries
             }
         }
@@ -65,9 +74,9 @@ public sealed class UsageStore
         return new UsageLimits(W("fiveHour"), W("sevenDay"), source, ts);
     }
 
-    private static UsageWindow? Effective(UsageWindow? w)
+    private UsageWindow? Effective(UsageWindow? w)
     {
         if (w is null || w.ResetsAt <= 0) return w;
-        return w.ResetsAt <= DateTimeOffset.UtcNow.ToUnixTimeSeconds() ? new UsageWindow(0, 0) : w;
+        return w.ResetsAt <= _now() ? new UsageWindow(0, 0) : w;
     }
 }

@@ -21,3 +21,10 @@ jobs:
 
       - name: Build
         run: dotnet build src/ClaudeStatusBar.csproj -c Release --warnaserror
+
+      - name: Test app
+        run: dotnet test tests/ClaudeStatusBar.Tests -c Release
+
+      # Files listed explicitly: glob arguments to --test need Node 21+.
+      - name: Test hooks
+        run: node --test (Get-ChildItem hooks/test/*.test.js).FullName

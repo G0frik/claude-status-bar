@@ -4,6 +4,26 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- Several sessions at once: one dot per Claude Code session (working, awaiting permission, idle),
+  with a tooltip listing each session's project, status and timer. The icon, label and timer follow
+  the session that needs attention and no longer jump to whichever session started last.
+- Unit tests for the app (xUnit) and the hooks (`node:test`), run in CI, plus
+  `tools/simulate-sessions.js` and `tools/check-tooltip.ps1` for load and popup checks.
+
+### Fixed
+
+- Tooltips and the menu were partly hidden behind the widget, which re-asserted its top-most
+  position every poll; it now waits while a popup is open.
+- A session's timer could start from another session's turn.
+- Status writes could be lost when the widget was reading the file at the same moment (Windows
+  rejects replacing an open file); writes are now retried, and the widget no longer blocks hooks
+  from deleting an ended session's file.
+- The completion chime played once per monitor; it now plays once.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

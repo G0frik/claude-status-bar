@@ -28,37 +28,54 @@ public sealed class StateStore
     public static readonly string Dir =
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "statusbar");
 
-    private static readonly string StatePath = Path.Combine(Dir, "state.json");
-    private static readonly string SessionsDir = Path.Combine(Dir, "sessions.d");
+    /// <summary>Active states with no hook event for this long are reported as idle.</summary>
+    public const double StaleActiveSeconds = 900;
+
+    private readonly string _statePath;
+    private readonly string _sessionsDir;
+    private readonly Func<double> _now;
 
     private DateTime _lastWrite = DateTime.MinValue;
     private ClaudeState _current = new();
+
+    /// <param name="dir">Status-bar data directory; defaults to <see cref="Dir"/>.</param>
+    /// <param name="now">Clock in unix seconds; defaults to the system clock.</param>
+    public StateStore(string? dir = null, Func<double>? now = null)
+    {
+        dir ??= Dir;
+        _statePath = Path.Combine(dir, "state.json");
+        _sessionsDir = Path.Combine(dir, "sessions.d");
+        _now = now ?? UnixNow;
+    }
+
+    public static double UnixNow() => DateTimeOffset.UtcNow.ToUnixTimeSeconds();
 
     /// <summary>Re-read the status file if it changed, then return the effective state.</summary>
     public ClaudeState Poll()
     {
         try
         {
-            var info = new FileInfo(StatePath);
+            var info = new FileInfo(_statePath);
             if (info.Exists && info.LastWriteTimeUtc != _lastWrite)
             {
-                _lastWrite = info.LastWriteTimeUtc;
-                _current = Parse(File.ReadAllText(StatePath));
+                _current = Parse(SharedFile.ReadAllText(_statePath));
+                _lastWrite = info.LastWriteTimeUtc; // only after a successful read, so a failed one retries
             }
         }
         catch { }
 
-        return Effective(_current);
+        return Effective(_current, _now());
     }
 
     /// <summary>Number of active sessions (one file per session under sessions.d).</summary>
     public int SessionCount()
     {
-        try { return Directory.Exists(SessionsDir) ? Directory.GetFiles(SessionsDir).Length : 0; }
+        try { return Directory.Exists(_sessionsDir) ? Directory.GetFiles(_sessionsDir).Length : 0; }
         catch { return 0; }
     }
 
-    private static ClaudeState Parse(string json)
+    /// <summary>Parse a hook-written status (state.json or a sessions.d entry). Throws on invalid JSON.</summary>
+    internal static ClaudeState Parse(string json)
     {
         using var doc = JsonDocument.Parse(json);
         var root = doc.RootElement;
@@ -78,15 +95,19 @@ public sealed class StateStore
         };
     }
 
-    private static ClaudeState Effective(ClaudeState s)
+    /// <summary>
+    /// The state to display: an active state with no event for <see cref="StaleActiveSeconds"/>,
+    /// or whose transcript ends with an interruption marker, is idle. Ts is kept, so the time of
+    /// the last real event stays known.
+    /// </summary>
+    internal static ClaudeState Effective(ClaudeState s, double now)
     {
         if (s.State is "thinking" or "tool" or "permission")
         {
-            double age = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - s.Ts;
-            if (age > 900 ||
+            if (now - s.Ts > StaleActiveSeconds ||
                 (!string.IsNullOrEmpty(s.Transcript) && LastLineContains(s.Transcript, "interrupted by user")))
             {
-                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId };
+                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Ts = s.Ts };
             }
         }
         return s;

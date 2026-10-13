@@ -26,6 +26,7 @@ fs.mkdirSync(sbDir, { recursive: true });
 fs.copyFileSync(path.join(__dirname, "update.js"), updateDest);
 fs.copyFileSync(path.join(__dirname, "lifecycle.js"), lifecycleDest);
 fs.copyFileSync(path.join(__dirname, "statusline.js"), statuslineDest);
+fs.copyFileSync(path.join(__dirname, "atomic.js"), path.join(sbDir, "atomic.js")); // shared by the above
 
 // Record the exe location for the launcher. Prefer an explicit arg; else guess next to install.js.
 const exeArg = process.argv[2];

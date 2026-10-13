@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // SessionStart/SessionEnd hook. Launches ClaudeStatusBar.exe and tracks each session as a file
-// under sessions.d/; the app exits on its own once no sessions remain.
+// under sessions.d/ (holding that session's status, which update.js keeps current); the app exits
+// on its own once no sessions remain.
 // Usage: node lifecycle.js <start|end>   (hook payload, including session_id, arrives on stdin)
 // Set CLAUDE_STATUSBAR_DEBUG=1 to append activity to ~/.claude/statusbar/hooks.log.
 
@@ -8,6 +9,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const cp = require("child_process");
+const { writeJsonAtomic } = require("./atomic");
 
 const EXE = "ClaudeStatusBar.exe";
 const dir = path.join(os.homedir(), ".claude", "statusbar");
@@ -48,10 +50,7 @@ function clearStaleState(id) {
     const prev = JSON.parse(fs.readFileSync(statePath, "utf8"));
     if (safeId(prev.sessionId) !== id) return;
     if (!["thinking", "tool", "permission"].includes(prev.state)) return;
-    const out = { ...prev, state: "idle", label: "", startedAt: 0, ts: Math.floor(Date.now() / 1000) };
-    const tmp = statePath + "." + process.pid + ".tmp";
-    fs.writeFileSync(tmp, JSON.stringify(out));
-    fs.renameSync(tmp, statePath);
+    writeJsonAtomic(statePath, { ...prev, state: "idle", label: "", startedAt: 0, ts: Math.floor(Date.now() / 1000) });
   } catch {}
 }
 
@@ -63,14 +62,22 @@ setTimeout(run, 1000); // fall back if stdin never closes, so the session is nev
 
 function run() {
   if (done) return; done = true;
-  let id = "";
-  try { id = JSON.parse(input).session_id; } catch {}
-  id = safeId(id);
+  let p = {};
+  try { p = JSON.parse(input) || {}; } catch {}
+  const id = safeId(p.session_id);
 
   if (event === "start") {
     // When the app is not running, any leftover session files are stale; clear them first.
     if (!running()) { try { for (const f of fs.readdirSync(sessDir)) fs.rmSync(path.join(sessDir, f), { force: true }); } catch {} }
-    try { fs.writeFileSync(path.join(sessDir, id), ""); } catch {}
+    // SessionStart also fires on resume and compaction; keep an existing entry's status.
+    const sessPath = path.join(sessDir, id);
+    let exists = false;
+    try { exists = fs.statSync(sessPath).size > 0; } catch {}
+    if (!exists) {
+      const project = p.cwd ? path.basename(p.cwd) : "";
+      const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts: Math.floor(Date.now() / 1000) };
+      try { writeJsonAtomic(sessPath, entry, dir); } catch {} // temp file outside sessions.d
+    }
     clearStaleState(id);
     launch();
   } else if (event === "end") {

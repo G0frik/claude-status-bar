@@ -4,13 +4,16 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 
 namespace ClaudeStatusBar;
 
 /// <summary>
-/// A borderless overlay docked into one monitor's taskbar. Polls the shared status file,
-/// renders the icon/label, and positions itself just before that monitor's tray cluster.
+/// A borderless overlay docked into one monitor's taskbar. Polls the hook-written session
+/// statuses, renders the focused session's icon/label/timer (plus one dot per session when
+/// several run), and positions itself just before that monitor's tray cluster.
 /// </summary>
 public partial class OverlayWindow : Window
 {
@@ -22,14 +25,20 @@ public partial class OverlayWindow : Window
     private const double VerbRotateSeconds = 4;
 
     private const double UsageBarHeight = 18;   // matches the icon
-    private const double UsageBarsWidth = 17;   // left margin + two 4px bars + 3px gap (see XAML)
     private const double UsageWarnPercent = 80; // bars switch to the accent color at this usage
+
+    private const int MaxDots = 5;              // more sessions show MaxDots-1 dots and "+N"
+    private const double DotSize = 6;
 
     private static readonly Brush UsageFill = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0)); // timer text color
     private static readonly Brush UsageWarnFill = Frozen(Brand);
+    private static readonly Brush DotPermission = Frozen(Amber);
+    private static readonly Brush DotIdle = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush DotFocusRing = Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF));
 
     private readonly Settings _settings = Settings.Shared;
     private readonly StateStore _store = new();
+    private readonly SessionStore _sessions = new();
     private readonly UsageStore _usage = new();
     private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
@@ -46,7 +55,7 @@ public partial class OverlayWindow : Window
 
     private double _startedAt; // turn start (unix seconds), 0 when no timer should show
 
-    private string _previousState = "";
+    private readonly Dictionary<string, string> _lastStates = new(); // per session, for the chime
     private MediaPlayer? _chime;
 
     private (double left, double top, double height, double right) _lastGeometry = (-1, -1, -1, -1);
@@ -59,15 +68,28 @@ public partial class OverlayWindow : Window
     private double _verbStartedAt;
     private int _verbIndex = -1;
 
-    private readonly double _baseWidth;     // pill width without the usage bars
     private UsageLimits? _shownUsage;       // last limits rendered; null while the bars are hidden
+    private readonly TextBlock _usageTip = new();
+
+    private string? _focusId;               // session the icon/label/timer follow
+    private string _dotsSignature = "";     // what the dots currently show; rebuilt when it changes
+    private readonly TextBlock _sessionsTip = new();
+    private readonly SolidColorBrush _dotWorking = new(Brand); // pulses while a working dot shows
+    private bool _pulsing;
+
+    // Open tooltips/menu. While any is open the widget doesn't re-assert topmost, which would
+    // raise it above its own popup and hide the part that overlaps the pill.
+    private int _openPopups;
 
     public OverlayWindow(string targetDevice = "", bool isController = true)
     {
         _targetDevice = targetDevice ?? "";
         _isController = isController;
         InitializeComponent();
-        _baseWidth = Root.Width;
+        UsageBars.ToolTip = TrackedToolTip(_usageTip);
+        SessionDots.ToolTip = TrackedToolTip(_sessionsTip);
+        Menu.Opened += (_, _) => _openPopups++;
+        Menu.Closed += (_, _) => PopupClosed();
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
     }
@@ -120,6 +142,20 @@ public partial class OverlayWindow : Window
         Native.SetWindowLong(_hwnd, Native.GWL_EXSTYLE, ex);
     }
 
+    private ToolTip TrackedToolTip(TextBlock content)
+    {
+        var tip = new ToolTip { Content = content };
+        tip.Opened += (_, _) => _openPopups++;
+        tip.Closed += (_, _) => PopupClosed();
+        return tip;
+    }
+
+    private void PopupClosed()
+    {
+        _openPopups = Math.Max(0, _openPopups - 1);
+        if (_openPopups == 0) AssertTopmost();
+    }
+
     private void AssertTopmost()
     {
         if (_closed || _hwnd == IntPtr.Zero) return;
@@ -142,11 +178,17 @@ public partial class OverlayWindow : Window
         CheckLifecycle();
         UpdateUsage();
         Reposition();
-        AssertTopmost(); // recover z-order each tick (cheap; no flicker since pos/size unchanged)
+        // Recover z-order each tick (cheap; no flicker since pos/size unchanged), except while a
+        // popup is open: that would raise the widget above its own tooltip or menu.
+        if (_openPopups == 0) AssertTopmost();
 
-        var state = _store.Poll();
+        var sessions = _sessions.Poll();
+        if (sessions.Count == 0) sessions = [_store.Poll()]; // hooks without per-session status
+        var state = SessionFocus.Pick(sessions, _focusId)!;
+        if (state.SessionId != _focusId) { _focusId = state.SessionId; _verbStartedAt = 0; }
         _startedAt = state.StartedAt;
-        MaybeChime(state);
+        MaybeChime(sessions);
+        UpdateDots(sessions, state);
 
         switch (state.State)
         {
@@ -274,12 +316,104 @@ public partial class OverlayWindow : Window
 
     private void UpdateTimer()
     {
-        if (_settings.ShowTimer && _startedAt > 0)
+        TimerText.Text = _settings.ShowTimer && _startedAt > 0 ? Elapsed(_startedAt) : "";
+    }
+
+    private static string Elapsed(double startedAt)
+    {
+        int secs = Math.Max(0, (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - startedAt));
+        return secs >= 60 ? $"{secs / 60}m {secs % 60}s" : $"{secs}s";
+    }
+
+    // ----- session dots -----
+
+    private enum DotKind { Idle, Working, Permission }
+
+    private static DotKind KindOf(string state) => state switch
+    {
+        "thinking" or "tool" => DotKind.Working,
+        "permission" => DotKind.Permission,
+        _ => DotKind.Idle,
+    };
+
+    /// <summary>One dot per session (2+ sessions), the focused one ringed, plus a tooltip listing them.</summary>
+    private void UpdateDots(IReadOnlyList<ClaudeState> sessions, ClaudeState focus)
+    {
+        if (sessions.Count < 2)
         {
-            int secs = Math.Max(0, (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - _startedAt));
-            TimerText.Text = secs >= 60 ? $"{secs / 60}m {secs % 60}s" : $"{secs}s";
+            if (_dotsSignature.Length == 0) return;
+            _dotsSignature = "";
+            SessionDots.Children.Clear();
+            SessionDots.Visibility = Visibility.Collapsed;
+            SetPulse(false);
+            return;
         }
-        else TimerText.Text = "";
+
+        var tip = SessionsTipText(sessions, focus);
+        if (_sessionsTip.Text != tip) _sessionsTip.Text = tip; // updated in place, so timers tick while open
+
+        // With more sessions than dots, show the ones that most need attention, in their usual order.
+        var shown = sessions.Count <= MaxDots
+            ? sessions
+            : sessions.Select((s, i) => (s, i))
+                      .OrderByDescending(x => SessionFocus.Rank(x.s.State)).ThenBy(x => x.i)
+                      .Take(MaxDots - 1).OrderBy(x => x.i).Select(x => x.s).ToList();
+        int hidden = sessions.Count - shown.Count;
+
+        var signature = string.Join(",", shown.Select(s => $"{s.SessionId}:{KindOf(s.State)}")) + $"|{focus.SessionId}|{hidden}";
+        if (signature == _dotsSignature) return;
+        _dotsSignature = signature;
+
+        SessionDots.Children.Clear();
+        foreach (var s in shown)
+            SessionDots.Children.Add(MakeDot(KindOf(s.State), s.SessionId == focus.SessionId));
+        if (hidden > 0)
+            SessionDots.Children.Add(new TextBlock
+            {
+                Text = $"+{hidden}", FontSize = 10, Foreground = UsageFill,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+        SessionDots.Visibility = Visibility.Visible;
+        SetPulse(shown.Any(s => KindOf(s.State) == DotKind.Working));
+    }
+
+    private Ellipse MakeDot(DotKind kind, bool focused) => new()
+    {
+        Width = DotSize, Height = DotSize,
+        Margin = new Thickness(0, 0, 4, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+        Fill = kind switch { DotKind.Working => _dotWorking, DotKind.Permission => DotPermission, _ => DotIdle },
+        Stroke = focused ? DotFocusRing : null,
+        StrokeThickness = focused ? 1 : 0,
+    };
+
+    // A single animation on the shared brush keeps every working dot pulsing in step; it runs
+    // only while a working dot is shown, so an idle widget doesn't keep the renderer busy.
+    private void SetPulse(bool on)
+    {
+        if (on == _pulsing) return;
+        _pulsing = on;
+        _dotWorking.BeginAnimation(Brush.OpacityProperty, on
+            ? new DoubleAnimation(1, 0.55, TimeSpan.FromMilliseconds(900)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }
+            : null);
+    }
+
+    private static string SessionsTipText(IReadOnlyList<ClaudeState> sessions, ClaudeState focus)
+    {
+        var names = SessionNames.Build(sessions);
+        return string.Join("\n", sessions.Select(s =>
+        {
+            var label = s.State switch
+            {
+                "thinking" => "Thinking…",
+                "tool" => string.IsNullOrEmpty(s.Label) ? "Working…" : s.Label,
+                "permission" => "Awaiting permission",
+                "done" => "Done",
+                _ => "Idle",
+            };
+            if (s.State is "thinking" or "tool" && s.StartedAt > 0) label += $" · {Elapsed(s.StartedAt)}";
+            return $"{(s.SessionId == focus.SessionId ? "▸" : "  ")} {names[s.SessionId]} — {label}";
+        }));
     }
 
     // ----- usage limits -----
@@ -295,15 +429,13 @@ public partial class OverlayWindow : Window
         if (usage is null)
         {
             UsageBars.Visibility = Visibility.Collapsed;
-            Root.Width = _baseWidth;
             return;
         }
 
         UsageBars.Visibility = Visibility.Visible;
-        Root.Width = _baseWidth + UsageBarsWidth;
         SetBar(FiveHourFill, usage.FiveHour);
         SetBar(SevenDayFill, usage.SevenDay);
-        UsageBars.ToolTip =
+        _usageTip.Text =
             $"5-hour limit: {Describe(usage.FiveHour, withDay: false)}\n" +
             $"Weekly limit: {Describe(usage.SevenDay, withDay: true)}";
     }
@@ -378,11 +510,22 @@ public partial class OverlayWindow : Window
 
     // ----- completion chime -----
 
-    private void MaybeChime(ClaudeState state)
+    // Chime when any session finishes a turn. Only the controller window plays it, so several
+    // monitors don't chime at once; a session seen for the first time never chimes.
+    private void MaybeChime(IReadOnlyList<ClaudeState> sessions)
     {
-        if (state.State == "done" && _previousState != "done" && _settings.PlayCompletionSound)
-            PlayChime();
-        _previousState = state.State;
+        bool finished = false;
+        foreach (var s in sessions)
+        {
+            if (s.State == "done" && _lastStates.TryGetValue(s.SessionId, out var prev) && prev != "done") finished = true;
+            _lastStates[s.SessionId] = s.State;
+        }
+        if (_lastStates.Count > sessions.Count)
+        {
+            var live = sessions.Select(s => s.SessionId).ToHashSet();
+            foreach (var gone in _lastStates.Keys.Where(k => !live.Contains(k)).ToList()) _lastStates.Remove(gone);
+        }
+        if (finished && _isController && _settings.PlayCompletionSound) PlayChime();
     }
 
     private void PlayChime()

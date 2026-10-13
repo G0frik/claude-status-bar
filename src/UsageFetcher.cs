@@ -167,7 +167,7 @@ public sealed class UsageFetcher : IDisposable
     {
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(CredentialsPath));
+            using var doc = JsonDocument.Parse(SharedFile.ReadAllText(CredentialsPath));
             if (!doc.RootElement.TryGetProperty("claudeAiOauth", out var oauth)) return null;
             if (!oauth.TryGetProperty("accessToken", out var t) || t.ValueKind != JsonValueKind.String) return null;
             if (oauth.TryGetProperty("expiresAt", out var exp) && exp.ValueKind == JsonValueKind.Number &&
@@ -187,7 +187,7 @@ public sealed class UsageFetcher : IDisposable
             var info = new FileInfo(ClaudeJsonPath);
             if (!info.Exists || info.LastWriteTimeUtc == _cacheWrite) return;
 
-            using var doc = JsonDocument.Parse(File.ReadAllText(ClaudeJsonPath));
+            using var doc = JsonDocument.Parse(SharedFile.ReadAllText(ClaudeJsonPath));
             _cacheWrite = info.LastWriteTimeUtc; // only after a successful read, so a failed one retries
             if (!doc.RootElement.TryGetProperty("cachedUsageUtilization", out var cache) ||
                 !cache.TryGetProperty("fetchedAtMs", out var at) || at.ValueKind != JsonValueKind.Number ||
@@ -205,7 +205,7 @@ public sealed class UsageFetcher : IDisposable
     {
         try
         {
-            using var doc = JsonDocument.Parse(File.ReadAllText(UsagePath));
+            using var doc = JsonDocument.Parse(SharedFile.ReadAllText(UsagePath));
             return doc.RootElement.TryGetProperty("ts", out var ts) && ts.ValueKind == JsonValueKind.Number ? ts.GetDouble() : 0;
         }
         catch { return 0; }
@@ -246,7 +246,7 @@ public sealed class UsageFetcher : IDisposable
         var limits = JsonSerializer.Serialize(new[] { usage["fiveHour"], usage["sevenDay"] });
         try
         {
-            using var prev = JsonDocument.Parse(File.ReadAllText(UsagePath));
+            using var prev = JsonDocument.Parse(SharedFile.ReadAllText(UsagePath));
             var old = JsonSerializer.Serialize(new object?[]
             {
                 prev.RootElement.TryGetProperty("fiveHour", out var a) ? a : null,
@@ -261,7 +261,7 @@ public sealed class UsageFetcher : IDisposable
         Directory.CreateDirectory(StateStore.Dir);
         var tmp = $"{UsagePath}.{Environment.ProcessId}.tmp";
         File.WriteAllText(tmp, JsonSerializer.Serialize(usage));
-        File.Move(tmp, UsagePath, overwrite: true);
+        SharedFile.Replace(tmp, UsagePath);
         UsageLog.Write($"{source,-10} wrote usage.json  5h={Pct(usage["fiveHour"])}  7d={Pct(usage["sevenDay"])}");
     }
 

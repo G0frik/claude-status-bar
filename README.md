@@ -26,6 +26,12 @@ taskbar and resizes itself so it never overlaps the notification tray.
 - **Usage limits** — two thin bars at the right edge, after the timer: your 5-hour (left) and weekly (right)
   claude.ai plan usage. A bar turns orange at 80%; hover for exact percentages and reset times.
   Shown for Pro and Max subscribers once a session has had its first response; hidden otherwise.
+- **Several sessions** — with two or more Claude Code sessions (terminals or VS Code chat tabs),
+  a small dot per session appears after the timer: orange (pulsing) while working, yellow while
+  awaiting permission, grey when idle. The icon, label and timer follow one session, ringed among
+  the dots: the one awaiting permission first, otherwise the one already shown, so a session that
+  starts working later doesn't take over. Beyond five sessions the dots end in `+N`. Hover the dots
+  for every session's project, status and timer.
 
 The widget tracks the taskbar height and DPI, and anchors itself just before the tray, reflowing
 when tray icons appear or disappear.
@@ -66,11 +72,13 @@ The release build bundles the .NET runtime, so no separate install is needed.
 
 ## How it works
 
-The Claude Code hooks write the current status to `~/.claude/statusbar/state.json`; the widget
-polls that file and renders the icon and label.
+The Claude Code hooks write each session's status to its own file under
+`~/.claude/statusbar/sessions.d/`; the widget polls them and renders the icon, label and dots.
+The hooks also write the latest event of any session to `state.json`, which the widget falls back
+to when hooks from an older install haven't written per-session status yet.
 
 ```
-Claude Code  ->  hooks       ->  ~/.claude/statusbar/state.json  ->  widget (polls 0.4s)
+Claude Code  ->  hooks       ->  ~/.claude/statusbar/sessions.d/<session>  ->  widget (polls 0.4s)
 usage API / cache / statusLine  ->  ~/.claude/statusbar/usage.json  ->  widget (usage bars)
 ```
 
@@ -113,8 +121,24 @@ Requires the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
 
 The hook registration done by `setup.bat` runs `hooks\install.js`, which merges the hooks into
 `~/.claude/settings.json` (backing it up once to `settings.json.bak-statusbar` and leaving other
-hooks intact), sets the status line as described above, copies the hook scripts to `~/.claude/statusbar`, and records the executable path.
-It is safe to run repeatedly.
+hooks intact), sets the status line as described above, copies the hook scripts to
+`~/.claude/statusbar`, and records the executable path. It is safe to run repeatedly; run it
+again after updating, so the installed hook scripts match the widget.
+
+### Tests
+
+```powershell
+dotnet test tests/ClaudeStatusBar.Tests                 # app: sessions, focus, stores, file sharing
+node --test (Get-ChildItem hooks/test/*.test.js).FullName  # hooks: per-session status, install, ...
+```
+
+Two tools help check the widget itself while it runs:
+
+- `node tools/simulate-sessions.js --sessions 8 --seconds 60` drives the real hook scripts for
+  several fake sessions with random events, so the dots can be watched under load. It reports any
+  failed hook or dropped write.
+- `.\tools\check-tooltip.ps1 -Target usage|dots|menu` hovers (or clicks) the widget and checks
+  that the popup stays fully visible above it.
 
 ## Uninstall
 

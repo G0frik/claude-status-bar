@@ -9,16 +9,16 @@
         Topmost="True"
         ResizeMode="NoResize"
         SizeToContent="Height"
-        Width="247"
+        Width="320"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
-    <!-- Glassy rounded pill. Fixed width + fixed-width timer slot keep the layout stable as the
+    <!-- Glassy rounded pill. Fixed-width label and timer slots keep the layout stable as the
          label or timer changes. The whole pill opens the menu on either mouse button.
-         The window is wide enough for the usage bars; the pill is right-aligned and widens into
-         that space when they show (code sets Root.Width), so the window itself never resizes.
-         The unused strip is fully transparent and click-through. -->
-    <Border x:Name="Root" Width="230" HorizontalAlignment="Right"
+         The pill sizes to its content and is right-aligned, so it widens to the left when the
+         session dots or usage bars show; the window is wide enough for all of them and never
+         resizes. The unused strip is fully transparent and click-through. -->
+    <Border x:Name="Root" HorizontalAlignment="Right"
             Padding="9,0,12,0" CornerRadius="7" ClipToBounds="True" Margin="0,3,0,3"
             Background="#59262626" BorderBrush="#22FFFFFF" BorderThickness="1"
             MouseRightButtonUp="OnAnyClick" MouseLeftButtonUp="OnAnyClick">
@@ -50,15 +50,17 @@
                 <MenuItem x:Name="MiQuit" Header="Quit Claude Status Bar" Click="OnQuit"/>
             </ContextMenu>
         </Border.ContextMenu>
-        <!-- Fixed columns: icon, label (wide enough for the longest verb), timer, usage bars. Fixed
-             widths mean the layout is stable regardless of the current word or timer value. The
-             bars sit last so they stay at the pill's right edge when the timer is empty; their
-             column collapses (and the pill narrows) when there is no usage data. -->
+        <!-- Columns: icon, label (wide enough for the longest verb), timer, session dots, usage
+             bars. Fixed widths mean the layout is stable regardless of the current word or timer
+             value. The dots and bars sit after the timer so they stay at the pill's right edge
+             when the timer is empty. The dots (2+ sessions) and bars (usage data) collapse when
+             unused. -->
         <Grid VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
-                <ColumnDefinition Width="128"/>
+                <ColumnDefinition Width="135"/>
                 <ColumnDefinition Width="46"/>
+                <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Image x:Name="IconImg" Grid.Column="0" Width="18" Height="18" VerticalAlignment="Center"
@@ -66,11 +68,19 @@
             <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center" FontSize="12"
                        TextTrimming="CharacterEllipsis" TextAlignment="Left"
                        Foreground="#FFF0F0F0" Text="Claude"/>
+            <!-- One dot per session when several run at once; built in code, with a tooltip
+                 listing every session. As tall as the usage bars, so the hover target is easy to
+                 hit and the tooltip clears the pill the same way. -->
+            <StackPanel x:Name="SessionDots" Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" Height="18"
+                        VerticalAlignment="Center" Background="Transparent" Visibility="Collapsed"
+                        ToolTipService.Placement="Top" ToolTipService.VerticalOffset="-10"
+                        ToolTipService.InitialShowDelay="300"/>
             <!-- Usage limits: 5-hour window (left) and weekly window (right), filled bottom-up.
                  Fill heights, colors, and the tooltip are set in code. -->
-            <StackPanel x:Name="UsageBars" Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0"
+            <StackPanel x:Name="UsageBars" Grid.Column="4" Orientation="Horizontal" Margin="6,0,0,0"
                         VerticalAlignment="Center" Background="Transparent" Visibility="Collapsed"
-                        ToolTipService.Placement="Top" ToolTipService.InitialShowDelay="300">
+                        ToolTipService.Placement="Top" ToolTipService.VerticalOffset="-10"
+                        ToolTipService.InitialShowDelay="300">
                 <Border Width="4" Height="18" CornerRadius="2" Background="#33FFFFFF" Margin="0,0,3,0">
                     <Border x:Name="FiveHourFill" VerticalAlignment="Bottom" CornerRadius="2" Height="0"/>
                 </Border>

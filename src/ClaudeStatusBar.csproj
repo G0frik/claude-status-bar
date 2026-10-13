@@ -16,6 +16,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <InternalsVisibleTo Include="ClaudeStatusBar.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Completion chime, embedded so it ships inside the single-file executable. -->
     <EmbeddedResource Include="..\assets\completion.mp3" Link="completion.mp3" />
   </ItemGroup>

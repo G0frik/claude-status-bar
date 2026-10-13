@@ -9,6 +9,7 @@
 const fs = require("fs");
 const os = require("os");
 const path = require("path");
+const { writeJsonAtomic } = require("./atomic");
 
 const dir = path.join(os.homedir(), ".claude", "statusbar");
 const usagePath = path.join(dir, "usage.json");
@@ -42,12 +43,9 @@ function record(p) {
   } catch {}
 
   try {
-    fs.mkdirSync(dir, { recursive: true });
-    const tmp = usagePath + "." + process.pid + ".tmp";
-    fs.writeFileSync(tmp, JSON.stringify({ fiveHour, sevenDay, source: "statusline", ts: Math.floor(Date.now() / 1000) }));
-    fs.renameSync(tmp, usagePath);
+    writeJsonAtomic(usagePath, { fiveHour, sevenDay, source: "statusline", ts: Math.floor(Date.now() / 1000) });
     debugLog(`5h=${fiveHour ? fiveHour.pct : "-"} 7d=${sevenDay ? sevenDay.pct : "-"}`);
-  } catch {}
+  } catch (e) { debugLog(`write failed: ${e.code || e.message}`); }
 }
 
 let input = "", done = false;
