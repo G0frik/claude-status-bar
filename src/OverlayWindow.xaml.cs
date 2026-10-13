@@ -71,6 +71,10 @@ public partial class OverlayWindow : Window
     private UsageLimits? _shownUsage;       // last limits rendered; null while the bars are hidden
     private readonly TextBlock _usageTip = new();
 
+    private IReadOnlyList<ClaudeState> _sessionsNow = [];   // as of the last poll
+    private string _notice = "";            // brief message shown in place of the label
+    private DateTime _noticeUntil;
+
     private string? _focusId;               // session the icon/label/timer follow
     private string _dotsSignature = "";     // what the dots currently show; rebuilt when it changes
     private readonly TextBlock _sessionsTip = new();
@@ -184,6 +188,7 @@ public partial class OverlayWindow : Window
 
         var sessions = _sessions.Poll();
         if (sessions.Count == 0) sessions = [_store.Poll()]; // hooks without per-session status
+        _sessionsNow = sessions;
         var state = SessionFocus.Pick(sessions, _focusId)!;
         if (state.SessionId != _focusId) { _focusId = state.SessionId; _verbStartedAt = 0; }
         _startedAt = state.StartedAt;
@@ -210,6 +215,7 @@ public partial class OverlayWindow : Window
                 Render("Claude", animate: false);
                 break;
         }
+        if (DateTime.UtcNow < _noticeUntil) StatusText.Text = _notice;
         UpdateTimer();
     }
 
@@ -366,7 +372,7 @@ public partial class OverlayWindow : Window
 
         SessionDots.Children.Clear();
         foreach (var s in shown)
-            SessionDots.Children.Add(MakeDot(KindOf(s.State), s.SessionId == focus.SessionId));
+            SessionDots.Children.Add(MakeDot(s.SessionId, KindOf(s.State), s.SessionId == focus.SessionId));
         if (hidden > 0)
             SessionDots.Children.Add(new TextBlock
             {
@@ -377,14 +383,23 @@ public partial class OverlayWindow : Window
         SetPulse(shown.Any(s => KindOf(s.State) == DotKind.Working));
     }
 
-    private Ellipse MakeDot(DotKind kind, bool focused) => new()
+    // The dot sits in a transparent, full-height hit box tagged with its session, so a click
+    // anywhere around it counts.
+    private Border MakeDot(string sessionId, DotKind kind, bool focused) => new()
     {
-        Width = DotSize, Height = DotSize,
-        Margin = new Thickness(0, 0, 4, 0),
-        VerticalAlignment = VerticalAlignment.Center,
-        Fill = kind switch { DotKind.Working => _dotWorking, DotKind.Permission => DotPermission, _ => DotIdle },
-        Stroke = focused ? DotFocusRing : null,
-        StrokeThickness = focused ? 1 : 0,
+        Tag = sessionId,
+        Width = DotSize + 4, Height = 18,
+        Background = Brushes.Transparent,
+        Child = new Ellipse
+        {
+            Width = DotSize, Height = DotSize,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = kind switch { DotKind.Working => _dotWorking, DotKind.Permission => DotPermission, _ => DotIdle },
+            Stroke = focused ? DotFocusRing : null,
+            StrokeThickness = focused ? 1 : 0,
+            IsHitTestVisible = false,
+        },
     };
 
     // A single animation on the shared brush keeps every working dot pulsing in step; it runs
@@ -585,7 +600,30 @@ public partial class OverlayWindow : Window
 
     // ----- context menu -----
 
-    private void OnAnyClick(object sender, MouseButtonEventArgs e)
+    // Left-click opens a session's window: the clicked dot's, otherwise the one the label shows.
+    private void OnOpenClick(object sender, MouseButtonEventArgs e)
+    {
+        e.Handled = true;
+        var id = (e.OriginalSource as FrameworkElement)?.Tag as string ?? _focusId;
+        var session = _sessionsNow.FirstOrDefault(s => s.SessionId == id);
+        if (session is not null) OpenSession(session);
+    }
+
+    private void OpenSession(ClaudeState session)
+    {
+        var hwnd = SessionWindowFinder.Find(session);
+        if (hwnd == IntPtr.Zero) ShowNotice("Can't find its window");
+        else SessionWindowFinder.Activate(hwnd);
+    }
+
+    private void ShowNotice(string text)
+    {
+        _notice = text;
+        _noticeUntil = DateTime.UtcNow.AddSeconds(2.5);
+        StatusText.Text = text;
+    }
+
+    private void OnMenuClick(object sender, MouseButtonEventArgs e)
     {
         if (Menu == null) return;
         Activate();

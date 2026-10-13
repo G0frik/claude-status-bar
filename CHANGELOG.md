@@ -12,7 +12,7 @@ All notable changes to this project are documented here. The format is based on
   with a tooltip listing each session's project, status and timer. The icon, label and timer follow
   the session that needs attention and no longer jump to whichever session started last.
 - Unit tests for the app (xUnit) and the hooks (`node:test`), run in CI, plus
-  `tools/simulate-sessions.js` and `tools/check-tooltip.ps1` for load and popup checks.
+  `tools/simulate-sessions.js` and `tools/check-ui.ps1` for load and popup checks.
 
 ### Fixed
 

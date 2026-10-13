@@ -16,6 +16,15 @@ public sealed class ClaudeState
     public string Transcript { get; set; } = "";
     public double StartedAt { get; set; }
     public double Ts { get; set; }
+
+    /// <summary>The session's Claude Code process (0 when unknown, e.g. older hooks).</summary>
+    public int Pid { get; set; }
+
+    /// <summary>What a permission request is for: the tool name or the notification message.</summary>
+    public string Detail { get; set; } = "";
+
+    /// <summary>Length of the turn that just finished, set with the "done" state.</summary>
+    public double LastTurnSeconds { get; set; }
 }
 
 /// <summary>
@@ -92,6 +101,9 @@ public sealed class StateStore
             Transcript = S("transcript"),
             StartedAt = N("startedAt"),
             Ts = N("ts"),
+            Pid = (int)N("pid"),
+            Detail = S("detail"),
+            LastTurnSeconds = N("lastTurnSeconds"),
         };
     }
 
@@ -107,7 +119,7 @@ public sealed class StateStore
             if (now - s.Ts > StaleActiveSeconds ||
                 (!string.IsNullOrEmpty(s.Transcript) && LastLineContains(s.Transcript, "interrupted by user")))
             {
-                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Ts = s.Ts };
+                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Ts = s.Ts, Pid = s.Pid };
             }
         }
         return s;

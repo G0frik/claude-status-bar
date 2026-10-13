@@ -21,7 +21,7 @@
     <Border x:Name="Root" HorizontalAlignment="Right"
             Padding="9,0,12,0" CornerRadius="7" ClipToBounds="True" Margin="0,3,0,3"
             Background="#59262626" BorderBrush="#22FFFFFF" BorderThickness="1"
-            MouseRightButtonUp="OnAnyClick" MouseLeftButtonUp="OnAnyClick">
+            MouseRightButtonUp="OnMenuClick" MouseLeftButtonUp="OnOpenClick">
         <Border.ContextMenu>
             <ContextMenu x:Name="Menu">
                 <MenuItem x:Name="MiTimer" Header="Show timer" IsCheckable="True" Click="OnToggleTimer"/>

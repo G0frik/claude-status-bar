@@ -1,21 +1,28 @@
 <#
 .SYNOPSIS
-  Checks that the widget's tooltips and menu stay fully visible above the widget.
+  Checks the running widget's popups and clicks with real mouse input.
 
 .DESCRIPTION
-  Moves the mouse over a part of the running widget (or clicks it for the menu) with real input,
-  waits several 400 ms poll ticks, then inspects the window z-order: the popup must sit above
-  the widget, and a tooltip must not overlap the pill. Saves a screenshot, restores the cursor,
-  and finally checks that the widget is back above the taskbar once the popup has closed.
-  Exits 0 on PASS, 1 on FAIL.
+  usage, dots, menu: hovers a part of the widget (right-clicks it for the menu), waits several
+  400 ms poll ticks, then inspects the window z-order: the popup must sit above the widget, and a
+  tooltip must not overlap the pill. Finally checks that the widget is back above the taskbar
+  once the popup has closed.
+
+  open: puts another window (Notepad) in front, left-clicks the widget (-At label or dot), and
+  checks that the foreground window becomes the session's window (title matching -ExpectTitle).
+
+  Saves screenshots on request and restores the cursor. Exits 0 on PASS, 1 on FAIL.
 
 .EXAMPLE
-  .\tools\check-tooltip.ps1 -Target usage
-  .\tools\check-tooltip.ps1 -Target dots -Screenshot dots.png
-  .\tools\check-tooltip.ps1 -Target menu
+  .\tools\check-ui.ps1 -Target usage
+  .\tools\check-ui.ps1 -Target dots -Screenshot dots.png
+  .\tools\check-ui.ps1 -Target menu
+  .\tools\check-ui.ps1 -Target open -At label -ExpectTitle "claude-status-bar"
 #>
 param(
-    [ValidateSet("usage", "dots", "menu")] [string]$Target = "usage",
+    [ValidateSet("usage", "dots", "menu", "open")] [string]$Target = "usage",
+    [ValidateSet("label", "dot")] [string]$At = "label",
+    [string]$ExpectTitle = "",
     [double]$WaitSeconds = 3,
     [string]$Screenshot = "",
     # Another screenshot 2.5 s later with the popup still open, to see its timers advance.
@@ -37,6 +44,9 @@ public static class ZOrder {
   [DllImport("user32.dll")] public static extern uint GetDpiForWindow(IntPtr h);
   [DllImport("user32.dll")] public static extern void mouse_event(uint f, int dx, int dy, uint d, IntPtr e);
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint f, IntPtr e);
+  [DllImport("user32.dll")] public static extern IntPtr GetForegroundWindow();
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr h, StringBuilder s, int n);
+  public static string Title(IntPtr h) { var sb = new StringBuilder(512); GetWindowText(h, sb, 512); return sb.ToString(); }
   [StructLayout(LayoutKind.Sequential)] public struct RECT { public int L, T, R, B; }
   public class Win { public IntPtr Hwnd; public uint Pid; public RECT Rect; public string Class; public int Z; }
   // Visible top-level windows, topmost first (EnumWindows walks the z-order top to bottom).
@@ -79,6 +89,33 @@ $point = switch ($Target) {
     "usage" { [System.Drawing.Point]::new($right - [int](6 * $scale), $midY) }
     "dots"  { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
     "menu"  { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
+    "open"  {
+        if ($At -eq "dot") { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
+        else { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
+    }
+}
+
+if ($Target -eq "open") {
+    $original = [System.Windows.Forms.Cursor]::Position
+    $other = Start-Process notepad -PassThru
+    try {
+        Start-Sleep -Milliseconds 1200
+        $before = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+        [System.Windows.Forms.Cursor]::Position = $point
+        Start-Sleep -Milliseconds 150
+        [ZOrder]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); [ZOrder]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+        Start-Sleep -Milliseconds 1000
+        $after = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+    }
+    finally {
+        [System.Windows.Forms.Cursor]::Position = $original
+        Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue
+    }
+    $ok = $after -and $after -notmatch "Notepad" -and (-not $ExpectTitle -or $after -like "*$ExpectTitle*")
+    Write-Host "$(if ($ok) { 'PASS' } else { 'FAIL' }) (open, clicked $At)"
+    Write-Host "  foreground before: $before"
+    Write-Host "  foreground after:  $after"
+    if ($ok) { exit 0 } else { exit 1 }
 }
 
 $original = [System.Windows.Forms.Cursor]::Position
@@ -86,8 +123,8 @@ $result = "PASS"; $notes = @()
 try {
     [System.Windows.Forms.Cursor]::Position = $point
     for ($i = 0; $i -lt 4; $i++) { [ZOrder]::mouse_event(0x0001, 1, 0, 0, [IntPtr]::Zero); Start-Sleep -Milliseconds 60 }
-    if ($Target -eq "menu") {
-        [ZOrder]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); [ZOrder]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+    if ($Target -eq "menu") {   # right-click opens the menu
+        [ZOrder]::mouse_event(0x0008, 0, 0, 0, [IntPtr]::Zero); [ZOrder]::mouse_event(0x0010, 0, 0, 0, [IntPtr]::Zero)
     }
     Start-Sleep -Seconds $WaitSeconds                    # several AssertTopmost ticks happen here
 
