@@ -52,3 +52,36 @@ test("an existing status line is chained, survives re-install, and is restored e
   assert.deepEqual(settings(home).statusLine, mine);
   assert.ok(!fs.existsSync(path.join(sbDir(home), "statusline-chain.json")));
 });
+
+test("hooks are registered in exec form, so a hook's parent is the Claude Code process", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  writeSettings(home, {});
+  runHook(home, "install.js");
+  const [entry] = settings(home).hooks.UserPromptSubmit;
+  assert.deepEqual(entry.hooks[0], { type: "command", command: "node", args: [path.join(sbDir(home), "update.js"), "prompt"] });
+  assert.equal(settings(home).hooks.SessionStart[0].hooks[0].args[1], "start");
+});
+
+test("re-installing over an older shell-form install replaces it without duplicates", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  const old = (script, evt) => ({ type: "command", command: `node "${path.join(sbDir(home), script)}" ${evt}` });
+  writeSettings(home, {
+    hooks: {
+      UserPromptSubmit: [{ hooks: [old("update.js", "prompt")] }],
+      PreToolUse: [{ matcher: "*", hooks: [old("update.js", "pre")] }, { matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }],
+      SessionStart: [{ hooks: [old("lifecycle.js", "start")] }],
+    },
+  });
+
+  runHook(home, "install.js");
+  const s = settings(home);
+  for (const evt of ["UserPromptSubmit", "PreToolUse", "SessionStart"]) {
+    const ours = s.hooks[evt].flatMap((e) => e.hooks).filter((h) => (h.args || []).some((a) => a.includes(sbDir(home))) || (h.command || "").includes(sbDir(home)));
+    assert.equal(ours.length, 1, `${evt}: exactly one status-bar hook`);
+    assert.equal(ours[0].command, "node");
+  }
+  assert.ok(s.hooks.PreToolUse.some((e) => e.hooks[0].command === "echo mine"), "user's own hook kept");
+
+  runHook(home, "uninstall.js", [], {}, PATH_WITHOUT_TASKKILL);
+  assert.deepEqual(settings(home).hooks, { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "echo mine" }] }] });
+});

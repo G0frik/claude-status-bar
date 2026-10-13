@@ -104,3 +104,36 @@ test("writes leave no temp files behind, in sessions.d or the status-bar dir", (
   const log = fs.readFileSync(path.join(sbDir(home), "hooks.log"), "utf8");
   assert.doesNotMatch(log, /write failed/);
 });
+
+test("records the parent process (the Claude Code session with exec-form hooks)", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "update.js", ["prompt"], payload("s1"));
+  assert.equal(session(home, "s1").pid, process.pid, "the test runner is the hook's parent here");
+});
+
+test("a permission request records what it is for", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "update.js", ["permreq"], payload("s1", { tool_name: "Bash" }));
+  assert.equal(session(home, "s1").detail, "Bash");
+
+  runHook(home, "update.js", ["notify"], payload("s2", { message: "Claude needs your permission to use Write", notification_type: "permission_prompt" }));
+  assert.equal(session(home, "s2").detail, "Claude needs your permission to use Write");
+
+  runHook(home, "update.js", ["post"], payload("s1", { tool_name: "Bash" }));
+  assert.equal(session(home, "s1").detail, "", "cleared once the session moves on");
+});
+
+test("stop records how long the turn took", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  fs.mkdirSync(sessDir(home), { recursive: true });
+  const now = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(sessDir(home), "s1"), JSON.stringify({ state: "tool", startedAt: now - 95, ts: now }));
+
+  runHook(home, "update.js", ["stop"], payload("s1"));
+  const s = session(home, "s1");
+  assert.ok(s.lastTurnSeconds >= 95 && s.lastTurnSeconds <= 97, `got ${s.lastTurnSeconds}`);
+  assert.equal(s.startedAt, 0);
+
+  runHook(home, "update.js", ["prompt"], payload("s1"));
+  assert.equal(session(home, "s1").lastTurnSeconds, 0, "only the stop event carries it");
+});

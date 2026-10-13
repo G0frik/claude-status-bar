@@ -75,7 +75,8 @@ function run() {
     try { exists = fs.statSync(sessPath).size > 0; } catch {}
     if (!exists) {
       const project = p.cwd ? path.basename(p.cwd) : "";
-      const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts: Math.floor(Date.now() / 1000) };
+      // pid: with exec-form hooks the parent process is the session's Claude Code process.
+      const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts: Math.floor(Date.now() / 1000), pid: process.ppid };
       try { writeJsonAtomic(sessPath, entry, dir); } catch {} // temp file outside sessions.d
     }
     clearStaleState(id);

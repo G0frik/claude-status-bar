@@ -35,10 +35,12 @@ const exe = exeArg || (fs.existsSync(guessed) ? guessed : "");
 if (exe) fs.writeFileSync(exePathFile, path.resolve(exe));
 else console.log("(!) No exe path given and none found; set", exePathFile, "manually.");
 
-// Hook commands. Quote paths for spaces; forward slashes are fine for node on Windows.
+// Hook commands, in exec form: Claude Code starts node directly instead of through a shell, so
+// a hook's parent process is the session's own Claude Code process, whose PID the hooks record
+// (the widget uses it to find the session's window).
 const q = (p) => `"${p}"`;
-const cmd = (evt) => `node ${q(updateDest)} ${evt}`;
-const life = (evt) => `node ${q(lifecycleDest)} ${evt}`;
+const cmd = (evt) => ({ command: "node", args: [updateDest, evt] });
+const life = (evt) => ({ command: "node", args: [lifecycleDest, evt] });
 
 let settings = {};
 if (fs.existsSync(settingsPath)) {
@@ -48,21 +50,20 @@ if (fs.existsSync(settingsPath)) {
 }
 settings.hooks = settings.hooks || {};
 
+// Ours in either form: shell form (older installs) names the script in `command`, exec form in `args`.
+const isOurHook = (h) => [h.command, ...(h.args || [])].some((s) => String(s || "").includes(MARKER));
 const stripOurs = (arr) =>
   (arr || [])
-    .map((entry) => ({
-      ...entry,
-      hooks: (entry.hooks || []).filter((h) => !(h.command || "").includes(MARKER)),
-    }))
+    .map((entry) => ({ ...entry, hooks: (entry.hooks || []).filter((h) => !isOurHook(h)) }))
     .filter((entry) => (entry.hooks || []).length > 0);
 
-const addUnmatched = (evt, command) => {
+const addUnmatched = (evt, hook) => {
   settings.hooks[evt] = stripOurs(settings.hooks[evt]);
-  settings.hooks[evt].push({ hooks: [{ type: "command", command }] });
+  settings.hooks[evt].push({ hooks: [{ type: "command", ...hook }] });
 };
-const addMatched = (evt, command) => {
+const addMatched = (evt, hook) => {
   settings.hooks[evt] = stripOurs(settings.hooks[evt]);
-  settings.hooks[evt].push({ matcher: "*", hooks: [{ type: "command", command }] });
+  settings.hooks[evt].push({ matcher: "*", hooks: [{ type: "command", ...hook }] });
 };
 
 // Status hooks (drive the animation/label)

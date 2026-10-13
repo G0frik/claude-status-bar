@@ -297,3 +297,15 @@ private at idle, and 0 % CPU at idle. That is mostly the WPF + .NET runtime itse
 ## Implementation notes
 
 _Spike results, measurements and any deviations from this plan go here as work proceeds._
+
+### Step 2: exec-form hooks (spike)
+
+- After `install.js` switched to exec form, a running Antigravity session picked up the new
+  settings on its next event. Its session file then recorded `pid` 14944, the live
+  `claude.exe` of the VS Code extension: the process whose parents lead to the Antigravity
+  window. Before the reload it recorded a short-lived PID (the Git Bash shell of the old
+  shell-form hooks), which is what exec form fixes.
+- `install.js` migrates shell-form entries in place (tested), so upgrading needs no manual
+  cleanup.
+- Still to observe in real use: that PermissionRequest carries `tool_name` (`detail`) in the
+  extension, and the Windows Terminal CLI case.

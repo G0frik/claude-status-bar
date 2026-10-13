@@ -21,10 +21,13 @@ if (!fs.existsSync(settingsPath)) {
   process.exit(0);
 }
 
+// Ours in either form: shell form (older installs) names the script in `command`, exec form in `args`.
+const isOurHook = (h) => [h.command, ...(h.args || [])].some((s) => String(s || "").includes(MARKER));
+
 const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
 for (const evt of Object.keys(settings.hooks || {})) {
   settings.hooks[evt] = (settings.hooks[evt] || [])
-    .map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !(h.command || "").includes(MARKER)) }))
+    .map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !isOurHook(h)) }))
     .filter((e) => (e.hooks || []).length > 0);
   if (settings.hooks[evt].length === 0) delete settings.hooks[evt];
 }

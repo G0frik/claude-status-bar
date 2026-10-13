@@ -44,3 +44,9 @@ test("start without an installed app path doesn't fail", (t) => {
   const home = tempHome(); t.after(() => rmHome(home));
   assert.equal(runHook(home, "lifecycle.js", ["start"], payload("s1")).status, 0);
 });
+
+test("start records the session's process", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "lifecycle.js", ["start"], payload("s1"));
+  assert.equal(readJson(path.join(sessDir(home), "s1")).pid, process.pid);
+});

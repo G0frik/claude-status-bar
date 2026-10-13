@@ -51,8 +51,10 @@ process.stdin.on("end", () => {
 
   // Track the session so one that predates the hook install is still counted, even when this
   // event doesn't change its status.
-  if (sessPath && !prev.state) write(sessPath, { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts });
-  let state = "idle", label = "", startedAt = prev.startedAt || 0;
+  // With exec-form hooks the parent process is the session's Claude Code process.
+  const pid = process.ppid;
+  if (sessPath && !prev.state) write(sessPath, { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts, pid });
+  let state = "idle", label = "", detail = "", startedAt = prev.startedAt || 0, lastTurnSeconds = 0;
 
   switch (event) {
     case "prompt":
@@ -73,13 +75,16 @@ process.stdin.on("end", () => {
       const isPerm = p.notification_type === "permission_prompt" ||
         m.includes("permission") || m.includes("approve") || m.includes("allow");
       if (!isPerm) return;
-      state = "permission"; label = "Awaiting permission"; startedAt = 0;
+      state = "permission"; label = "Awaiting permission"; detail = String(p.message || ""); startedAt = 0;
       break;
     }
     case "permreq":
-      state = "permission"; label = "Awaiting permission"; startedAt = 0; break;
+      state = "permission"; label = "Awaiting permission"; detail = p.tool_name || ""; startedAt = 0; break;
     case "stop":
-      state = "done"; label = "Done"; startedAt = 0; break;
+      state = "done"; label = "Done";
+      lastTurnSeconds = startedAt ? Math.max(0, ts - startedAt) : 0; // for "finished" notifications
+      startedAt = 0;
+      break;
     default:
       return;
   }
@@ -91,6 +96,7 @@ process.stdin.on("end", () => {
     sessionId: p.session_id || "",
     transcript: p.transcript_path || prev.transcript || "",
     startedAt, ts,
+    pid, detail, lastTurnSeconds,
   };
   if (sessPath) write(sessPath, out);
   write(statePath, out);
