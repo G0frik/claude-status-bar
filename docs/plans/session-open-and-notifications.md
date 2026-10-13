@@ -1,6 +1,6 @@
 # Open a session from the widget, and notifications
 
-**Status:** planned · **Tracked in:** [ROADMAP.md](../../ROADMAP.md)
+**Status:** done · **Tracked in:** [ROADMAP.md](../../ROADMAP.md)
 
 ## Context
 
@@ -349,7 +349,44 @@ new build used less than the old baseline: 115 MB private, 1,663 handles, 18 GDI
 objects, against 130 MB, 2,127, 31 and 41. That compares a fresh widget with one that had been
 running for hours, so take it as "no regression" rather than a gain.
 
-**Pending, needs the desktop free (it moves the mouse and changes the foreground window):**
-`check-ui.ps1` `open`, `panel`, `notify` and `menu`, and the leak run of 100 panel opens and 100
-notifications. During development the user was in a fullscreen game. There, Windows reported
-`QUNS_BUSY`, the state in which notifications must be (and are, by policy) suppressed.
+### On-screen checks (desktop free)
+
+All run against the real widget with `tools/check-ui.ps1`, using simulated sessions where needed:
+
+| Check | Result |
+|---|---|
+| `open`, clicking the label (Notepad in front) | PASS: the Antigravity window came to the front |
+| `open`, clicking a simulated session's dot | PASS |
+| `panel`, 4 sessions | PASS: above the widget, 106 px = 4 rows, hovered row highlighted, timers tick |
+| `notify` | PASS: shown in 34–40 polls, at most 2 at once, foreground never changed |
+| `menu`, `usage` | PASS |
+
+Screenshots confirmed the notification styles: "Needs permission · WebFetch" with the amber dot,
+and "Finished · 22s" with the Claude mark.
+
+**Leak test.** A fresh widget got an idle baseline, then this load: 6 simulated sessions, the
+panel opened and closed 100 times, and notifications showing. The load was run twice.
+
+| | Private | Handles | GDI | USER |
+|---|---|---|---|---|
+| Fresh, idle | 114.5 MB | 1,653 | 18 | 26 |
+| After load, round 1 | 128.4 MB (+13.9) | 1,665 (+12) | 30 (+12) | 29 (+3) |
+| After load, round 2 | 128.7 MB (+0.3) | 1,670 (+5) | 30 (0) | 28 (−1) |
+
+No leak: the second round is flat. The first round's +13.9 MB is a one-time cost of first using
+the panel and notifications (code JIT, the popup and notification windows, the Consolas font).
+That misses the plan's +10 MB budget by about 4 MB on a fresh start. For scale, the old build
+sat at 130 MB after hours of use.
+
+**Bugs found by these checks, fixed:**
+- **Timer reset after permission.** Waiting for permission reset the turn's start time, so after
+  approval the timer and "Finished · N s" counted only from the approval. Permission now keeps
+  the turn's start; the widget already hides the timer while waiting.
+- **Test tooling:**
+  - the simulator didn't send a tool name with permission requests;
+  - the simulator counted another run's sessions as its own leftovers;
+  - `check-ui.ps1 open` identified Notepad by its title, which is localized ("Блокнот"); it now
+    compares window handles.
+
+**Seen, not changed:** hovering the usage bars while a notification is showing can lay the
+usage tooltip over the notification's right edge. Both are transient; it's cosmetic.

@@ -39,6 +39,7 @@ if (!args.home) {
 
 const env = { ...process.env, USERPROFILE: HOME, HOME, CLAUDE_STATUSBAR_DEBUG: "1" };
 const stats = { sessionsStarted: 0, sessionsEnded: 0, events: 0, hookFailures: 0, byEvent: {} };
+const ownIds = new Set(); // this run's sessions, so a concurrent run's files aren't counted as leftovers
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const rand = (lo, hi) => lo + Math.random() * (hi - lo);
 const pick = (xs) => xs[Math.floor(Math.random() * xs.length)];
@@ -77,6 +78,7 @@ const TOOLS = ["Read", "Edit", "Bash", "Grep", "WebFetch", "Write"];
 async function runSession(index, startDelay, lifetimeMs) {
   await sleep(startDelay);
   const id = `sim-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  ownIds.add(id);
   const base = { session_id: id, cwd: path.join("C:\\sim", PROJECTS[index % PROJECTS.length]), transcript_path: "" };
   await hook("lifecycle.js", "start", base);
   stats.sessionsStarted++;
@@ -87,7 +89,7 @@ async function runSession(index, startDelay, lifetimeMs) {
     await sleep(state === "done" ? rand(MAX_MS, MAX_MS * 4) : rand(MIN_MS, MAX_MS)); // pause between turns
     const event = nextEvent(state, Date.now() - turnStarted);
     if (event === "prompt") turnStarted = Date.now();
-    await hook("update.js", event, { ...base, tool_name: event === "pre" || event === "post" ? pick(TOOLS) : undefined });
+    await hook("update.js", event, { ...base, tool_name: ["pre", "post", "permreq"].includes(event) ? pick(TOOLS) : undefined });
     state = nextState[event];
   }
   await hook("update.js", "stop", base);
@@ -119,7 +121,7 @@ async function runSession(index, startDelay, lifetimeMs) {
     const log = fs.readFileSync(logPath, "utf8").slice(logStart);
     droppedWrites = (log.match(/write failed/g) || []).length;
   } catch {}
-  const leftovers = (() => { try { return fs.readdirSync(path.join(SB_DIR, "sessions.d")).filter((f) => f.startsWith("sim-")); } catch { return []; } })();
+  const leftovers = (() => { try { return fs.readdirSync(path.join(SB_DIR, "sessions.d")).filter((f) => ownIds.has(f)); } catch { return []; } })();
 
   const summary = { ...stats, droppedWrites, leftoverSimSessions: leftovers.length, seconds: (Date.now() - started) / 1000 };
   console.log(JSON.stringify(summary, null, 2));

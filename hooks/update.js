@@ -75,11 +75,13 @@ process.stdin.on("end", () => {
       const isPerm = p.notification_type === "permission_prompt" ||
         m.includes("permission") || m.includes("approve") || m.includes("allow");
       if (!isPerm) return;
-      state = "permission"; label = "Awaiting permission"; detail = String(p.message || ""); startedAt = 0;
+      // The turn keeps its start time while waiting (the widget hides the timer meanwhile), so
+      // the timer and "finished after" cover the whole turn, not just the part after approval.
+      state = "permission"; label = "Awaiting permission"; detail = String(p.message || "");
       break;
     }
     case "permreq":
-      state = "permission"; label = "Awaiting permission"; detail = p.tool_name || ""; startedAt = 0; break;
+      state = "permission"; label = "Awaiting permission"; detail = p.tool_name || ""; break;
     case "stop":
       state = "done"; label = "Done";
       lastTurnSeconds = startedAt ? Math.max(0, ts - startedAt) : 0; // for "finished" notifications

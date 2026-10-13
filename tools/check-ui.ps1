@@ -133,18 +133,20 @@ if ($Target -eq "open") {
     $other = Start-Process notepad -PassThru
     try {
         Start-Sleep -Milliseconds 1200
-        $before = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+        $beforeHandle = [ZOrder]::GetForegroundWindow()
+        $before = [ZOrder]::Title($beforeHandle)
         [System.Windows.Forms.Cursor]::Position = $point
         Start-Sleep -Milliseconds 150
         [ZOrder]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); [ZOrder]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
         Start-Sleep -Milliseconds 1000
-        $after = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+        $afterHandle = [ZOrder]::GetForegroundWindow()
+        $after = [ZOrder]::Title($afterHandle)
     }
     finally {
         [System.Windows.Forms.Cursor]::Position = $original
         Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue
     }
-    $ok = $after -and $after -notmatch "Notepad" -and (-not $ExpectTitle -or $after -like "*$ExpectTitle*")
+    $ok = $afterHandle -ne $beforeHandle -and (-not $ExpectTitle -or $after -like "*$ExpectTitle*")
     Write-Host "$(if ($ok) { 'PASS' } else { 'FAIL' }) (open, clicked $At)"
     Write-Host "  foreground before: $before"
     Write-Host "  foreground after:  $after"

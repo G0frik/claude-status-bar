@@ -30,6 +30,8 @@ All notable changes to this project are documented here. The format is based on
 
 ### Fixed
 
+- After you approved a permission request, the timer (and now "finished after") restarted
+  from the approval instead of covering the whole turn.
 - Status icons were re-rendered on every poll and animation frame (a new bitmap each time); they
   are now rendered once and reused, which keeps GDI objects and peak memory down under load.
 

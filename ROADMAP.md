@@ -6,13 +6,7 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Planned
 
-- **Open a session from the widget** (M). Click a session's dot, a row in the hover panel, or
-  the pill itself, and that session's VS Code / terminal window comes to the front. A hover
-  panel lists every session, so sessions hidden behind `+N` are reachable too.
-  Design: [docs/plans/session-open-and-notifications.md](docs/plans/session-open-and-notifications.md)
-- **Notifications** (S–M). A small popup in the widget's style when a session needs permission
-  or finishes a long turn, shown only when you aren't already looking at that session and
-  Windows isn't in do-not-disturb mode. Clicking it opens the session. Same design doc.
+Nothing in progress; pick from the ideas below.
 
 ## Ideas
 
@@ -36,5 +30,10 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Done
 
-- **Several sessions at once** (0.2.0+): one dot per session, sticky focus, live tooltip.
+- **Open a session from the widget** (unreleased): click a dot, a panel row, or the widget to bring
+  that session's window to the front; the sessions panel lists every session.
+  Design: [docs/plans/session-open-and-notifications.md](docs/plans/session-open-and-notifications.md)
+- **Notifications** (unreleased): when a session needs permission or finishes a long turn, in the
+  widget's style, never taking focus. Same design doc.
+- **Several sessions at once** (unreleased): one dot per session, sticky focus, live tooltip.
 - **Usage-limit bars** (0.2.0): 5-hour and weekly plan usage, with smart refresh.

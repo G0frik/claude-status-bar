@@ -137,3 +137,17 @@ test("stop records how long the turn took", (t) => {
   runHook(home, "update.js", ["prompt"], payload("s1"));
   assert.equal(session(home, "s1").lastTurnSeconds, 0, "only the stop event carries it");
 });
+
+test("waiting for permission keeps the turn's start, so the whole turn is timed", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  fs.mkdirSync(sessDir(home), { recursive: true });
+  const now = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(sessDir(home), "s1"), JSON.stringify({ state: "thinking", startedAt: now - 60, ts: now }));
+
+  runHook(home, "update.js", ["permreq"], payload("s1", { tool_name: "Bash" }));
+  assert.equal(session(home, "s1").startedAt, now - 60);
+  runHook(home, "update.js", ["post"], payload("s1", { tool_name: "Bash" }));
+  assert.equal(session(home, "s1").startedAt, now - 60, "approval doesn't restart the timer");
+  runHook(home, "update.js", ["stop"], payload("s1"));
+  assert.ok(session(home, "s1").lastTurnSeconds >= 60);
+});
