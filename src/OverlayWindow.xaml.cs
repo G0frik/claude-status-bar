@@ -21,8 +21,16 @@ public partial class OverlayWindow : Window
     private const double VerticalInset = 6;    // total top+bottom gap inside the taskbar band
     private const double VerbRotateSeconds = 4;
 
+    private const double UsageBarHeight = 18;   // matches the icon
+    private const double UsageBarsWidth = 17;   // left margin + two 4px bars + 3px gap (see XAML)
+    private const double UsageWarnPercent = 80; // bars switch to the accent color at this usage
+
+    private static readonly Brush UsageFill = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0)); // timer text color
+    private static readonly Brush UsageWarnFill = Frozen(Brand);
+
     private readonly Settings _settings = Settings.Shared;
     private readonly StateStore _store = new();
+    private readonly UsageStore _usage = new();
     private readonly DispatcherTimer _poll = new() { Interval = TimeSpan.FromMilliseconds(400) };
 
     private readonly string _targetDevice; // monitor device name; empty resolves to primary
@@ -51,11 +59,15 @@ public partial class OverlayWindow : Window
     private double _verbStartedAt;
     private int _verbIndex = -1;
 
+    private readonly double _baseWidth;     // pill width without the usage bars
+    private UsageLimits? _shownUsage;       // last limits rendered; null while the bars are hidden
+
     public OverlayWindow(string targetDevice = "", bool isController = true)
     {
         _targetDevice = targetDevice ?? "";
         _isController = isController;
         InitializeComponent();
+        _baseWidth = Root.Width;
         SourceInitialized += OnSourceInitialized;
         Loaded += OnLoaded;
     }
@@ -128,6 +140,7 @@ public partial class OverlayWindow : Window
     {
         if (_closed) return;
         CheckLifecycle();
+        UpdateUsage();
         Reposition();
         AssertTopmost(); // recover z-order each tick (cheap; no flicker since pos/size unchanged)
 
@@ -269,6 +282,76 @@ public partial class OverlayWindow : Window
         else TimerText.Text = "";
     }
 
+    // ----- usage limits -----
+
+    private void UpdateUsage()
+    {
+        var usage = _settings.ShowUsageBars ? _usage.Poll() : null;
+        if (usage is { HasData: false }) usage = null;
+        if (usage == _shownUsage) return;
+        _shownUsage = usage;
+        if (_isController) LogShownUsage(usage); // one window logs, not one per monitor
+
+        if (usage is null)
+        {
+            UsageBars.Visibility = Visibility.Collapsed;
+            Root.Width = _baseWidth;
+            return;
+        }
+
+        UsageBars.Visibility = Visibility.Visible;
+        Root.Width = _baseWidth + UsageBarsWidth;
+        SetBar(FiveHourFill, usage.FiveHour);
+        SetBar(SevenDayFill, usage.SevenDay);
+        UsageBars.ToolTip =
+            $"5-hour limit: {Describe(usage.FiveHour, withDay: false)}\n" +
+            $"Weekly limit: {Describe(usage.SevenDay, withDay: true)}";
+    }
+
+    private void LogShownUsage(UsageLimits? usage)
+    {
+        if (usage is null)
+        {
+            UsageLog.Write(_settings.ShowUsageBars
+                ? "widget     bars hidden: no usage data (usage.json missing or empty)"
+                : "widget     bars hidden: turned off in the menu");
+            return;
+        }
+        var asOf = usage.UpdatedAt > 0
+            ? DateTimeOffset.FromUnixTimeSeconds((long)usage.UpdatedAt).LocalDateTime.ToString("HH:mm:ss")
+            : "?";
+        var source = usage.Source.Length > 0 ? usage.Source : "unknown";
+        UsageLog.Write($"widget     showing 5h {Describe(usage.FiveHour, withDay: false)}, " +
+                       $"7d {Describe(usage.SevenDay, withDay: true)}  (from {source}, as of {asOf})");
+    }
+
+    private static void SetBar(Border fill, UsageWindow? window)
+    {
+        double pct = window?.Percent ?? 0;
+        fill.Height = pct > 0 ? Math.Max(2, Math.Round(UsageBarHeight * pct / 100)) : 0; // a sliver stays visible
+        fill.Background = pct >= UsageWarnPercent ? UsageWarnFill : UsageFill;
+    }
+
+    private static string Describe(UsageWindow? window, bool withDay)
+    {
+        if (window is null) return "no data";
+        var text = $"{Math.Round(window.Percent)}% used";
+        if (window.ResetsAt > 0)
+        {
+            var resets = DateTimeOffset.FromUnixTimeSeconds((long)window.ResetsAt).LocalDateTime;
+            // Day and short time formatted separately: inside a custom format "t" is the AM/PM designator.
+            text += withDay ? $" · resets {resets:ddd} {resets:t}" : $" · resets {resets:t}";
+        }
+        return text;
+    }
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     // ----- thinking verbs -----
 
     private string ThinkingLabel()
@@ -372,6 +455,8 @@ public partial class OverlayWindow : Window
     private void SyncMenuChecks()
     {
         MiTimer.IsChecked = _settings.ShowTimer;
+        MiUsage.IsChecked = _settings.ShowUsageBars;
+        MiUsageOnline.IsChecked = _settings.FetchUsageOnline;
         MiSound.IsChecked = _settings.PlayCompletionSound;
         MiStyleSpark.IsChecked = _settings.Style == AnimStyle.Spark;
         MiStyleCode.IsChecked = _settings.Style == AnimStyle.Code;
@@ -380,12 +465,27 @@ public partial class OverlayWindow : Window
     }
 
     private static string AppVersion =>
-        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.1.0";
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.2.0";
 
     private void OnToggleTimer(object sender, RoutedEventArgs e)
     {
         _settings.ShowTimer = !_settings.ShowTimer;
         _settings.Save();
+        OverlayManager.Instance?.SyncAll();
+    }
+
+    private void OnToggleUsage(object sender, RoutedEventArgs e)
+    {
+        _settings.ShowUsageBars = !_settings.ShowUsageBars;
+        _settings.Save();
+        OverlayManager.Instance?.SyncAll();
+    }
+
+    private void OnToggleUsageOnline(object sender, RoutedEventArgs e)
+    {
+        _settings.FetchUsageOnline = !_settings.FetchUsageOnline;
+        _settings.Save();
+        UsageFetcher.Instance?.Refresh(); // switch sources now rather than at the next poll
         OverlayManager.Instance?.SyncAll();
     }
 

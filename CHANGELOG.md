@@ -4,6 +4,21 @@ All notable changes to this project are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to
 [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2026-10-13
+
+### Added
+
+- Usage-limit bars: two thin vertical bars at the right edge of the widget showing the 5-hour
+  and weekly claude.ai plan usage, turning orange at 80%, with a tooltip giving exact percentages
+  and reset times. Toggle with **Show usage limits** in the menu.
+- Plan usage is fetched from Anthropic's usage endpoint about once a minute using Claude Code's
+  existing sign-in, so the bars work from the VS Code extension too. **Fetch usage online** in the
+  menu turns this off, falling back to the usage Claude Code caches in `~/.claude.json`.
+- `usage.log` next to the executable records where the displayed usage came from.
+- `statusline.js`, registered as the Claude Code `statusLine` to record plan usage to
+  `usage.json` from the CLI. An existing status line is preserved by chaining it, and restored on
+  uninstall.
+
 ## [0.1.0] - 2026-06-25
 
 Initial release. A Windows port of the macOS
@@ -24,4 +39,5 @@ Initial release. A Windows port of the macOS
 - One-click `setup.bat` / `uninstall.bat`, plus `build.ps1` for building and packaging.
 - Self-contained release build that bundles the .NET runtime.
 
+[0.2.0]: https://github.com/G0frik/claude-status-bar/releases/tag/v0.2.0
 [0.1.0]: https://github.com/BankkRoll/claude-status-bar/releases/tag/v0.1.0

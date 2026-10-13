@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // Installer. Merges the status-bar hooks into ~/.claude/settings.json, preserving any other
 // hooks, copies the hook scripts to ~/.claude/statusbar/, and records the path to
-// ClaudeStatusBar.exe for lifecycle.js. Safe to run repeatedly; existing status-bar hooks are
-// removed before being re-added.
+// ClaudeStatusBar.exe for lifecycle.js. Also sets the statusLine to statusline.js (which feeds
+// the usage bars); an existing statusLine is saved to statusline-chain.json and kept running by
+// piping into it. Safe to run repeatedly; existing status-bar hooks are removed before being
+// re-added.
 // Usage: node install.js [path\to\ClaudeStatusBar.exe]
 
 const fs = require("fs");
@@ -14,6 +16,8 @@ const sbDir = path.join(home, ".claude", "statusbar");
 const MARKER = sbDir; // every hook command we add points inside this dir
 const updateDest = path.join(sbDir, "update.js");
 const lifecycleDest = path.join(sbDir, "lifecycle.js");
+const statuslineDest = path.join(sbDir, "statusline.js");
+const chainPath = path.join(sbDir, "statusline-chain.json"); // the user's own statusLine, if any
 const settingsPath = path.join(home, ".claude", "settings.json");
 const exePathFile = path.join(sbDir, "app-path.txt");
 const node = process.execPath;
@@ -21,6 +25,7 @@ const node = process.execPath;
 fs.mkdirSync(sbDir, { recursive: true });
 fs.copyFileSync(path.join(__dirname, "update.js"), updateDest);
 fs.copyFileSync(path.join(__dirname, "lifecycle.js"), lifecycleDest);
+fs.copyFileSync(path.join(__dirname, "statusline.js"), statuslineDest);
 
 // Record the exe location for the launcher. Prefer an explicit arg; else guess next to install.js.
 const exeArg = process.argv[2];
@@ -70,8 +75,28 @@ addUnmatched("Stop", cmd("stop"));
 addUnmatched("SessionStart", life("start"));
 addUnmatched("SessionEnd", life("end"));
 
+// Status line (feeds the usage bars). A statusLine that isn't ours is saved and chained after
+// ours, so the user's own status line keeps rendering. On a re-run the saved one is reused.
+const isOurs = (sl) => !!sl && (sl.command || "").includes(MARKER);
+let chained = null;
+if (settings.statusLine && !isOurs(settings.statusLine)) {
+  chained = settings.statusLine;
+  fs.writeFileSync(chainPath, JSON.stringify(chained, null, 2) + "\n");
+} else if (isOurs(settings.statusLine)) {
+  try { chained = JSON.parse(fs.readFileSync(chainPath, "utf8")); } catch {}
+} else {
+  fs.rmSync(chainPath, { force: true });
+}
+const statusCmd = `node ${q(statuslineDest)}`;
+settings.statusLine = {
+  ...(chained || {}), // keeps padding / refreshInterval
+  type: "command",
+  command: chained && chained.command ? `${statusCmd} --tee | ${chained.command}` : statusCmd,
+};
+
 fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
 console.log("Installed status-bar hooks into", settingsPath);
-console.log("Scripts:", updateDest, "and", lifecycleDest);
+console.log("Scripts:", updateDest, lifecycleDest, "and", statuslineDest);
+if (chained) console.log("Existing statusLine kept (chained after ours); saved to", chainPath);
 if (exe) console.log("App path recorded:", path.resolve(exe));
 console.log("Backup (first run only):", settingsPath + ".bak-statusbar");

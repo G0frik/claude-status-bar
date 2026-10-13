@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // Removes the status-bar hooks from ~/.claude/settings.json and stops the running app.
-// Other hooks are left intact. The settings backup and the app executable are not touched.
+// Other hooks are left intact. Our statusLine is replaced by the one it was chained to, if any.
+// The settings backup and the app executable are not touched.
 
 const fs = require("fs");
 const os = require("os");
@@ -11,6 +12,7 @@ const home = os.homedir();
 const sbDir = path.join(home, ".claude", "statusbar");
 const MARKER = sbDir; // every hook command added by install.js points inside this directory
 const settingsPath = path.join(home, ".claude", "settings.json");
+const chainPath = path.join(sbDir, "statusline-chain.json"); // saved by install.js
 
 try { cp.execSync('taskkill /IM ClaudeStatusBar.exe /F', { stdio: "ignore" }); } catch {}
 
@@ -25,6 +27,14 @@ for (const evt of Object.keys(settings.hooks || {})) {
     .map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !(h.command || "").includes(MARKER)) }))
     .filter((e) => (e.hooks || []).length > 0);
   if (settings.hooks[evt].length === 0) delete settings.hooks[evt];
+}
+
+if (settings.statusLine && (settings.statusLine.command || "").includes(MARKER)) {
+  let chained = null;
+  try { chained = JSON.parse(fs.readFileSync(chainPath, "utf8")); } catch {}
+  if (chained) settings.statusLine = chained;
+  else delete settings.statusLine;
+  fs.rmSync(chainPath, { force: true });
 }
 
 fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");

@@ -14,6 +14,10 @@ public sealed class Settings
 {
     public bool ShowTimer { get; set; } = true;
     public bool PlayCompletionSound { get; set; } = false;
+    public bool ShowUsageBars { get; set; } = true;
+
+    /// <summary>Fetch usage from Anthropic's usage endpoint; when off, only local sources are used.</summary>
+    public bool FetchUsageOnline { get; set; } = true;
 
     /// <summary>Monitor device names to show the widget on. Empty means the primary monitor only.</summary>
     public List<string> Monitors { get; set; } = new();

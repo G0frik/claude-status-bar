@@ -9,18 +9,24 @@
         Topmost="True"
         ResizeMode="NoResize"
         SizeToContent="Height"
-        Width="230"
+        Width="247"
         UseLayoutRounding="True"
         SnapsToDevicePixels="True">
 
     <!-- Glassy rounded pill. Fixed width + fixed-width timer slot keep the layout stable as the
-         label or timer changes. The whole pill opens the menu on either mouse button. -->
-    <Border x:Name="Root" Padding="9,0,12,0" CornerRadius="7" ClipToBounds="True" Margin="0,3,0,3"
+         label or timer changes. The whole pill opens the menu on either mouse button.
+         The window is wide enough for the usage bars; the pill is right-aligned and widens into
+         that space when they show (code sets Root.Width), so the window itself never resizes.
+         The unused strip is fully transparent and click-through. -->
+    <Border x:Name="Root" Width="230" HorizontalAlignment="Right"
+            Padding="9,0,12,0" CornerRadius="7" ClipToBounds="True" Margin="0,3,0,3"
             Background="#59262626" BorderBrush="#22FFFFFF" BorderThickness="1"
             MouseRightButtonUp="OnAnyClick" MouseLeftButtonUp="OnAnyClick">
         <Border.ContextMenu>
             <ContextMenu x:Name="Menu">
                 <MenuItem x:Name="MiTimer" Header="Show timer" IsCheckable="True" Click="OnToggleTimer"/>
+                <MenuItem x:Name="MiUsage" Header="Show usage limits" IsCheckable="True" Click="OnToggleUsage"/>
+                <MenuItem x:Name="MiUsageOnline" Header="Fetch usage online" IsCheckable="True" Click="OnToggleUsageOnline"/>
                 <MenuItem x:Name="MiSound" Header="Play Completion Sound"
                           IsCheckable="True" Click="OnToggleSound"/>
                 <Separator/>
@@ -38,19 +44,34 @@
                 <MenuItem x:Name="MiQuit" Header="Quit Claude Status Bar" Click="OnQuit"/>
             </ContextMenu>
         </Border.ContextMenu>
-        <!-- Three fixed columns: icon, label (wide enough for the longest verb), timer. Fixed
-             widths mean the layout is stable regardless of the current word or timer value. -->
+        <!-- Fixed columns: icon, label (wide enough for the longest verb), timer, usage bars. Fixed
+             widths mean the layout is stable regardless of the current word or timer value. The
+             bars sit last so they stay at the pill's right edge when the timer is empty; their
+             column collapses (and the pill narrows) when there is no usage data. -->
         <Grid VerticalAlignment="Center">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto"/>
                 <ColumnDefinition Width="128"/>
                 <ColumnDefinition Width="46"/>
+                <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Image x:Name="IconImg" Grid.Column="0" Width="18" Height="18" VerticalAlignment="Center"
                    Margin="0,0,8,0" RenderOptions.BitmapScalingMode="HighQuality"/>
             <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center" FontSize="12"
                        TextTrimming="CharacterEllipsis" TextAlignment="Left"
                        Foreground="#FFF0F0F0" Text="Claude"/>
+            <!-- Usage limits: 5-hour window (left) and weekly window (right), filled bottom-up.
+                 Fill heights, colors, and the tooltip are set in code. -->
+            <StackPanel x:Name="UsageBars" Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0"
+                        VerticalAlignment="Center" Background="Transparent" Visibility="Collapsed"
+                        ToolTipService.Placement="Top" ToolTipService.InitialShowDelay="300">
+                <Border Width="4" Height="18" CornerRadius="2" Background="#33FFFFFF" Margin="0,0,3,0">
+                    <Border x:Name="FiveHourFill" VerticalAlignment="Bottom" CornerRadius="2" Height="0"/>
+                </Border>
+                <Border Width="4" Height="18" CornerRadius="2" Background="#33FFFFFF">
+                    <Border x:Name="SevenDayFill" VerticalAlignment="Bottom" CornerRadius="2" Height="0"/>
+                </Border>
+            </StackPanel>
             <TextBlock x:Name="TimerText" Grid.Column="2" VerticalAlignment="Center" FontSize="12"
                        FontFamily="Consolas" TextAlignment="Right"
                        Foreground="#FFC0C0C0" Text=""/>
