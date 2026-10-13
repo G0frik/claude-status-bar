@@ -35,6 +35,14 @@
                 </MenuItem>
                 <MenuItem x:Name="MiSound" Header="Play Completion Sound"
                           IsCheckable="True" Click="OnToggleSound"/>
+                <MenuItem Header="Notifications">
+                    <MenuItem x:Name="MiNotify" Header="Show notifications" IsCheckable="True" Click="OnToggleNotify"/>
+                    <Separator/>
+                    <MenuItem x:Name="MiNotifyPermission" Header="When a session needs permission"
+                              IsCheckable="True" Click="OnToggleNotifyPermission"/>
+                    <MenuItem x:Name="MiNotifyFinished" Header="When a turn finishes"
+                              IsCheckable="True" Click="OnToggleNotifyFinished"/>
+                </MenuItem>
                 <Separator/>
                 <MenuItem Header="Animation" IsEnabled="False"/>
                 <MenuItem x:Name="MiStyleSpark" Header="Claude Spark" IsCheckable="True" Click="OnStyleSpark"/>

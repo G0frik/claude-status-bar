@@ -137,7 +137,7 @@ Two tools help check the widget itself while it runs:
 - `node tools/simulate-sessions.js --sessions 8 --seconds 60` drives the real hook scripts for
   several fake sessions with random events, so the dots can be watched under load. It reports any
   failed hook or dropped write.
-- `.\tools\check-ui.ps1 -Target usage|dots|menu|open` hovers or clicks the widget and checks
+- `.\tools\check-ui.ps1 -Target usage|panel|menu|open|notify` hovers or clicks the widget and checks
   that the popup stays fully visible above it.
 
 ## Uninstall

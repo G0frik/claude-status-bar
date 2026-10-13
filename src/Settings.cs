@@ -22,6 +22,11 @@ public sealed class Settings
     /// <summary>Minutes between online usage fetches while Claude Code is active.</summary>
     public int UsageRefreshMinutes { get; set; } = 5;
 
+    /// <summary>Show notifications at all; the two below choose which.</summary>
+    public bool ShowNotifications { get; set; } = true;
+    public bool NotifyPermission { get; set; } = true;
+    public bool NotifyFinished { get; set; } = true;
+
     /// <summary>Monitor device names to show the widget on. Empty means the primary monitor only.</summary>
     public List<string> Monitors { get; set; } = new();
 

@@ -188,6 +188,20 @@ internal static class Native
     [DllImport("user32.dll")]
     public static extern bool FlashWindowEx(ref FLASHWINFO info);
 
+    // ----- notifications -----
+
+    public const int WS_EX_NOACTIVATE = 0x08000000;
+
+    /// <summary>QUNS_ACCEPTS_NOTIFICATIONS; every other state (fullscreen app, presentation mode, quiet hours) means "don't".</summary>
+    public const int QUNS_ACCEPTS_NOTIFICATIONS = 5;
+
+    [DllImport("shell32.dll")]
+    public static extern int SHQueryUserNotificationState(out int state);
+
+    /// <summary>Whether Windows says not to disturb the user right now.</summary>
+    public static bool UserBusy() =>
+        SHQueryUserNotificationState(out int state) == 0 && state != QUNS_ACCEPTS_NOTIFICATIONS;
+
     // ----- consoles (classic conhost windows aren't owned by an ancestor of the session) -----
 
     [DllImport("kernel32.dll", SetLastError = true)]

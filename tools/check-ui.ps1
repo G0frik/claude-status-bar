@@ -3,10 +3,14 @@
   Checks the running widget's popups and clicks with real mouse input.
 
 .DESCRIPTION
-  usage, dots, menu: hovers a part of the widget (right-clicks it for the menu), waits several
-  400 ms poll ticks, then inspects the window z-order: the popup must sit above the widget, and a
-  tooltip must not overlap the pill. Finally checks that the widget is back above the taskbar
-  once the popup has closed.
+  usage, panel, menu: hovers a part of the widget (the usage bars, the session dots; right-clicks
+  it for the menu), waits several 400 ms poll ticks, then inspects the window z-order: the popup
+  must sit above the widget and must not overlap the pill. For the panel, -ExpectRows also checks
+  its height. Finally checks that the widget is back above the taskbar once the popup has closed.
+
+  notify: puts Notepad in front and watches for -WaitSeconds while something (the session
+  simulator) makes sessions ask for permission or finish: at least one notification must appear,
+  never more than 3 at once, and the foreground window must never change (they never take focus).
 
   open: puts another window (Notepad) in front, left-clicks the widget (-At label or dot), and
   checks that the foreground window becomes the session's window (title matching -ExpectTitle).
@@ -15,12 +19,14 @@
 
 .EXAMPLE
   .\tools\check-ui.ps1 -Target usage
-  .\tools\check-ui.ps1 -Target dots -Screenshot dots.png
+  .\tools\check-ui.ps1 -Target panel -ExpectRows 4 -Screenshot panel.png
   .\tools\check-ui.ps1 -Target menu
   .\tools\check-ui.ps1 -Target open -At label -ExpectTitle "claude-status-bar"
+  .\tools\check-ui.ps1 -Target notify -WaitSeconds 60   # with simulate-sessions.js running
 #>
 param(
-    [ValidateSet("usage", "dots", "menu", "open")] [string]$Target = "usage",
+    [ValidateSet("usage", "panel", "menu", "open", "notify")] [string]$Target = "usage",
+    [int]$ExpectRows = 0,
     [ValidateSet("label", "dot")] [string]$At = "label",
     [string]$ExpectTitle = "",
     [double]$WaitSeconds = 3,
@@ -87,12 +93,39 @@ $right = $r.R - [int](13 * $scale)                      # 12px padding + 1px bor
 # + 4+3+4), then the session dots (the last dot's centre is 4px margin + 3px from their edge).
 $point = switch ($Target) {
     "usage" { [System.Drawing.Point]::new($right - [int](6 * $scale), $midY) }
-    "dots"  { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
+    "panel" { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
     "menu"  { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
     "open"  {
         if ($At -eq "dot") { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
         else { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
     }
+}
+
+if ($Target -eq "notify") {
+    $other = Start-Process notepad -PassThru
+    $seen = 0; $most = 0; $stolen = @()
+    try {
+        Start-Sleep -Milliseconds 1200
+        $front = [ZOrder]::GetForegroundWindow()
+        $deadline = (Get-Date).AddSeconds($WaitSeconds)
+        while ((Get-Date) -lt $deadline) {
+            Start-Sleep -Milliseconds 250
+            $null, $popups = Get-WidgetWindows
+            # Notifications: 300x52 DIP windows of the widget process.
+            $toasts = @($popups | Where-Object {
+                [math]::Abs(($_.Rect.R - $_.Rect.L) - 300 * $scale) -le 2 -and [math]::Abs(($_.Rect.B - $_.Rect.T) - 52 * $scale) -le 2 })
+            if ($toasts.Count -gt 0) { $seen++ }
+            if ($toasts.Count -gt $most) { $most = $toasts.Count }
+            $now = [ZOrder]::GetForegroundWindow()
+            if ($now -ne $front) { $stolen += [ZOrder]::Title($now); $front = $now }
+        }
+    }
+    finally { Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue }
+    $ok = $seen -gt 0 -and $most -le 3 -and $stolen.Count -eq 0
+    Write-Host "$(if ($ok) { 'PASS' } else { 'FAIL' }) (notify)"
+    Write-Host "  polls with a notification: $seen; most at once: $most"
+    if ($stolen) { Write-Host "  foreground changed to: $($stolen -join ', ')" }
+    if ($ok) { exit 0 } else { exit 1 }
 }
 
 if ($Target -eq "open") {
@@ -135,7 +168,14 @@ try {
         $notes += "popup z=$($p.Z) widget z=$($widget.Z) popup rect=($($pr.L),$($pr.T))-($($pr.R),$($pr.B)) pill top=$pillTop"
         if ($p.Z -gt $widget.Z) { $result = "FAIL"; $notes += "popup is BELOW the widget" }
         if ($Target -ne "menu" -and $pr.B -gt $pillTop -and $pr.R -gt $r.L -and $pr.L -lt $r.R) {
-            $result = "FAIL"; $notes += "tooltip overlaps the pill by $($pr.B - $pillTop)px"
+            $result = "FAIL"; $notes += "popup overlaps the pill by $($pr.B - $pillTop)px"
+        }
+        if ($Target -eq "panel" -and $ExpectRows -gt 0) {
+            # Rows are 24 DIPs (up to 12 visible), plus 4+4 padding and a 1px border each side.
+            $expected = ([Math]::Min($ExpectRows, 12) * 24 + 10) * $scale
+            $height = $pr.B - $pr.T
+            $notes += "panel height $height px, expected about $([int]$expected) for $ExpectRows rows"
+            if ([math]::Abs($height - $expected) -gt 3) { $result = "FAIL"; $notes += "panel height doesn't match $ExpectRows rows" }
         }
     }
 

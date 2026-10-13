@@ -55,7 +55,8 @@ public partial class OverlayWindow : Window
 
     private double _startedAt; // turn start (unix seconds), 0 when no timer should show
 
-    private readonly Dictionary<string, string> _lastStates = new(); // per session, for the chime
+    private readonly SessionTransitions _transitions = new(); // controller only: chime and notifications
+    private ToastManager? _toasts;           // created on the first notification
     private MediaPlayer? _chime;
 
     private (double left, double top, double height, double right) _lastGeometry = (-1, -1, -1, -1);
@@ -175,6 +176,7 @@ public partial class OverlayWindow : Window
         _closed = true;
         _poll.Stop();
         CompositionTarget.Rendering -= OnRender;
+        _toasts?.DismissAll();
     }
 
     // ----- status polling -----
@@ -195,7 +197,7 @@ public partial class OverlayWindow : Window
         var state = SessionFocus.Pick(sessions, _focusId)!;
         if (state.SessionId != _focusId) { _focusId = state.SessionId; _verbStartedAt = 0; }
         _startedAt = state.StartedAt;
-        MaybeChime(sessions);
+        if (_isController) HandleTransitions(sessions);
         UpdateDots(sessions, state);
         if (_panel is { IsOpen: true }) _panel.Refresh(sessions, _focusId); // only fed while visible
 
@@ -274,6 +276,7 @@ public partial class OverlayWindow : Window
 
         Top = bandTop;
         Left = left;
+        _toasts?.Layout(); // notifications follow the widget
     }
 
     // ----- rendering -----
@@ -546,24 +549,40 @@ public partial class OverlayWindow : Window
         return verbs[next];
     }
 
-    // ----- completion chime -----
+    // ----- chime and notifications -----
 
-    // Chime when any session finishes a turn. Only the controller window plays it, so several
-    // monitors don't chime at once; a session seen for the first time never chimes.
-    private void MaybeChime(IReadOnlyList<ClaudeState> sessions)
+    // Only the controller window runs this, so several monitors don't chime or notify at once.
+    // A session seen for the first time produces no events.
+    private void HandleTransitions(IReadOnlyList<ClaudeState> sessions)
     {
+        var events = _transitions.Update(sessions);
+        if (events.Count == 0) return;
+
         bool finished = false;
-        foreach (var s in sessions)
+        foreach (var e in events)
         {
-            if (s.State == "done" && _lastStates.TryGetValue(s.SessionId, out var prev) && prev != "done") finished = true;
-            _lastStates[s.SessionId] = s.State;
+            if (e.Kind == SessionEventKind.Finished) finished = true;
+            if (NotificationPolicy.Dismisses(e.Kind)) _toasts?.Dismiss(e.Session.SessionId);
+            else if (ShouldNotify(e)) Toasts().Show(e, SessionNames.Build(sessions).GetValueOrDefault(e.Session.SessionId, e.Session.Project));
         }
-        if (_lastStates.Count > sessions.Count)
+        if (finished && _settings.PlayCompletionSound) PlayChime();
+    }
+
+    // Settings first (free); the system queries only for events that would otherwise notify.
+    private bool ShouldNotify(SessionEvent e) =>
+        NotificationPolicy.ShouldShow(e, _settings, userBusy: false, lookingAtSession: false)
+        && NotificationPolicy.ShouldShow(e, _settings, Native.UserBusy(), SessionWindowFinder.IsForeground(e.Session));
+
+    private ToastManager Toasts()
+    {
+        if (_toasts is not null) return _toasts;
+        _toasts = new ToastManager(() => (Left + Width, Top + Root.Margin.Top), Brand, Amber);
+        _toasts.OpenRequested += id =>
         {
-            var live = sessions.Select(s => s.SessionId).ToHashSet();
-            foreach (var gone in _lastStates.Keys.Where(k => !live.Contains(k)).ToList()) _lastStates.Remove(gone);
-        }
-        if (finished && _isController && _settings.PlayCompletionSound) PlayChime();
+            var session = _sessionsNow.FirstOrDefault(s => s.SessionId == id);
+            if (session is not null) OpenSession(session);
+        };
+        return _toasts;
     }
 
     private void PlayChime()
@@ -665,6 +684,10 @@ public partial class OverlayWindow : Window
         foreach (var item in MiUsageRefresh.Items.OfType<MenuItem>())
             item.IsChecked = item.Tag is string t && t == _settings.UsageRefreshMinutes.ToString();
         MiSound.IsChecked = _settings.PlayCompletionSound;
+        MiNotify.IsChecked = _settings.ShowNotifications;
+        MiNotifyPermission.IsChecked = _settings.NotifyPermission;
+        MiNotifyFinished.IsChecked = _settings.NotifyFinished;
+        MiNotifyPermission.IsEnabled = MiNotifyFinished.IsEnabled = _settings.ShowNotifications;
         MiStyleSpark.IsChecked = _settings.Style == AnimStyle.Spark;
         MiStyleCode.IsChecked = _settings.Style == AnimStyle.Code;
         MiStyleCrab.IsChecked = _settings.Style == AnimStyle.Crab;
@@ -702,6 +725,23 @@ public partial class OverlayWindow : Window
         _settings.UsageRefreshMinutes = minutes;
         _settings.Save();
         UsageFetcher.Instance?.Refresh();
+        OverlayManager.Instance?.SyncAll();
+    }
+
+    private void OnToggleNotify(object sender, RoutedEventArgs e) =>
+        ChangeNotifications(() => _settings.ShowNotifications = !_settings.ShowNotifications);
+
+    private void OnToggleNotifyPermission(object sender, RoutedEventArgs e) =>
+        ChangeNotifications(() => _settings.NotifyPermission = !_settings.NotifyPermission);
+
+    private void OnToggleNotifyFinished(object sender, RoutedEventArgs e) =>
+        ChangeNotifications(() => _settings.NotifyFinished = !_settings.NotifyFinished);
+
+    private void ChangeNotifications(Action change)
+    {
+        change();
+        _settings.Save();
+        if (!_settings.ShowNotifications) _toasts?.DismissAll();
         OverlayManager.Instance?.SyncAll();
     }
 

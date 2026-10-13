@@ -6,7 +6,8 @@
 // was dropped (hooks run with CLAUDE_STATUSBAR_DEBUG=1, which logs failed writes).
 //
 // Usage: node tools/simulate-sessions.js [--sessions 8] [--seconds 60] [--min-ms 50] [--max-ms 500]
-//                                        [--home <dir>]
+//                                        [--long-turns] [--home <dir>]
+// --long-turns keeps every turn going for at least 25 s, so finishing it notifies.
 // Without --home it writes to your real ~/.claude/statusbar, where a running widget shows it;
 // the widget must be running then, or lifecycle.js would clear the existing session files.
 
@@ -22,6 +23,8 @@ const SECONDS = Number(args.seconds || 60);
 const MIN_MS = Number(args["min-ms"] || 50);
 const MAX_MS = Number(args["max-ms"] || 500);
 const HOME = args.home ? path.resolve(args.home) : os.homedir();
+const LONG_TURNS = process.argv.includes("--long-turns");
+const MIN_TURN_MS = 25000;
 const HOOKS = path.join(__dirname, "..", "hooks");
 const SB_DIR = path.join(HOME, ".claude", "statusbar");
 const PROJECTS = ["alpha", "beta", "gamma", "alpha", "delta", "beta"]; // repeats test name numbering
@@ -56,10 +59,13 @@ function hook(script, arg, payload) {
 }
 
 // The next hook event for a session in `state`, following Claude Code's real ordering.
-function nextEvent(state) {
+// `turnMs` is how long the current turn has run; with --long-turns it can't stop early.
+function nextEvent(state, turnMs) {
   switch (state) {
     case "idle": case "done": return "prompt";
-    case "thinking": return pick(["pre", "pre", "pre", "stop", "permreq"]);
+    case "thinking":
+      if (LONG_TURNS && turnMs < MIN_TURN_MS) return pick(["pre", "pre", "pre", "permreq"]);
+      return pick(["pre", "pre", "pre", "stop", "permreq"]);
     case "tool": return "post";
     case "permission": return "post"; // approved; the tool runs
     default: return "prompt";
@@ -75,11 +81,12 @@ async function runSession(index, startDelay, lifetimeMs) {
   await hook("lifecycle.js", "start", base);
   stats.sessionsStarted++;
 
-  let state = "idle";
+  let state = "idle", turnStarted = Date.now();
   const end = Date.now() + lifetimeMs;
   while (Date.now() < end) {
     await sleep(state === "done" ? rand(MAX_MS, MAX_MS * 4) : rand(MIN_MS, MAX_MS)); // pause between turns
-    const event = nextEvent(state);
+    const event = nextEvent(state, Date.now() - turnStarted);
+    if (event === "prompt") turnStarted = Date.now();
     await hook("update.js", event, { ...base, tool_name: event === "pre" || event === "post" ? pick(TOOLS) : undefined });
     state = nextState[event];
   }
