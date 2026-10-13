@@ -19,6 +19,9 @@ public sealed class Settings
     /// <summary>Fetch usage from Anthropic's usage endpoint; when off, only local sources are used.</summary>
     public bool FetchUsageOnline { get; set; } = true;
 
+    /// <summary>Minutes between online usage fetches while Claude Code is active.</summary>
+    public int UsageRefreshMinutes { get; set; } = 5;
+
     /// <summary>Monitor device names to show the widget on. Empty means the primary monitor only.</summary>
     public List<string> Monitors { get; set; } = new();
 

@@ -27,6 +27,12 @@
                 <MenuItem x:Name="MiTimer" Header="Show timer" IsCheckable="True" Click="OnToggleTimer"/>
                 <MenuItem x:Name="MiUsage" Header="Show usage limits" IsCheckable="True" Click="OnToggleUsage"/>
                 <MenuItem x:Name="MiUsageOnline" Header="Fetch usage online" IsCheckable="True" Click="OnToggleUsageOnline"/>
+                <MenuItem x:Name="MiUsageRefresh" Header="Refresh usage every">
+                    <MenuItem Header="2 minutes"  Tag="2"  IsCheckable="True" Click="OnUsageRefresh"/>
+                    <MenuItem Header="5 minutes"  Tag="5"  IsCheckable="True" Click="OnUsageRefresh"/>
+                    <MenuItem Header="10 minutes" Tag="10" IsCheckable="True" Click="OnUsageRefresh"/>
+                    <MenuItem Header="15 minutes" Tag="15" IsCheckable="True" Click="OnUsageRefresh"/>
+                </MenuItem>
                 <MenuItem x:Name="MiSound" Header="Play Completion Sound"
                           IsCheckable="True" Click="OnToggleSound"/>
                 <Separator/>

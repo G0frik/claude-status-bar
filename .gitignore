@@ -10,6 +10,9 @@ publish/
 .vscode/
 *.suo
 
+# Claude Code personal settings (local permission rules)
+.claude/settings.local.json
+
 # OS
 Thumbs.db
 desktop.ini

@@ -11,9 +11,11 @@ All notable changes to this project are documented here. The format is based on
 - Usage-limit bars: two thin vertical bars at the right edge of the widget showing the 5-hour
   and weekly claude.ai plan usage, turning orange at 80%, with a tooltip giving exact percentages
   and reset times. Toggle with **Show usage limits** in the menu.
-- Plan usage is fetched from Anthropic's usage endpoint about once a minute using Claude Code's
-  existing sign-in, so the bars work from the VS Code extension too. **Fetch usage online** in the
-  menu turns this off, falling back to the usage Claude Code caches in `~/.claude.json`.
+- Plan usage is fetched from Anthropic's usage endpoint using Claude Code's existing sign-in, so
+  the bars work from the VS Code extension too. It refreshes every 5 minutes by default (**Refresh
+  usage every** in the menu) only while Claude is working and shortly after, and backs off after
+  rate-limit responses. **Fetch usage online** turns it off, falling back to the usage Claude Code
+  caches in `~/.claude.json`.
 - `usage.log` next to the executable records where the displayed usage came from.
 - `statusline.js`, registered as the Claude Code `statusLine` to record plan usage to
   `usage.json` from the CLI. An existing status line is preserved by chaining it, and restored on

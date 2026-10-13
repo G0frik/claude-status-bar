@@ -38,6 +38,7 @@ Click the widget (either mouse button) to open its menu:
 - **Show usage limits** — toggle the usage bars.
 - **Fetch usage online** — on by default; turn off to keep the widget off the network (see
   [How it works](#how-it-works)).
+- **Refresh usage every** — 2, 5 (default), 10, or 15 minutes between online fetches.
 - **Play Completion Sound** — a chime when a turn finishes.
 - **Animation** — Claude Spark, Claude Code, or Crab Walking.
 - **Show on** — choose which monitors display the widget (defaults to the primary monitor).
@@ -73,16 +74,20 @@ Claude Code  ->  hooks       ->  ~/.claude/statusbar/state.json  ->  widget (pol
 usage API / cache / statusLine  ->  ~/.claude/statusbar/usage.json  ->  widget (usage bars)
 ```
 
-Plan usage comes from two sources that write the same file:
+Plan usage comes from three sources that write the same file:
 
-- **The usage API.** While running, the widget asks `api.anthropic.com` for your plan usage about
-  once a minute, using the sign-in Claude Code keeps in `~/.claude/.credentials.json`. It only
-  reads that file: the token is never stored elsewhere, refreshed, or sent anywhere but
-  Anthropic. This is what makes the bars work from the VS Code extension, which never runs status
-  line commands. The endpoint is the one behind `/usage` and is undocumented, so it could change.
-  Turn off **Fetch usage online** to stop these requests; the widget then reads the copy of the
-  same data Claude Code caches in `~/.claude.json` instead. That copy only updates when Claude
-  Code fetches usage itself (for example when you open `/usage`), so it can be hours old.
+- **The usage API.** The widget asks `api.anthropic.com` for your plan usage, using the sign-in
+  Claude Code keeps in `~/.claude/.credentials.json`. It only reads that file: the token is never
+  stored elsewhere, refreshed, or sent anywhere but Anthropic. This is what makes the bars work
+  from the VS Code extension, which never runs status line commands. The endpoint is the one
+  behind `/usage`; it is undocumented, so it could change, and it rate-limits frequent callers.
+  The widget therefore fetches once at startup, then every **Refresh usage every** minutes only
+  while Claude is working and for one interval after the turn ends, and not at all while idle.
+  After a rate-limit or error response it waits twice as long each time, up to 30 minutes.
+- **Claude Code's cache.** Claude Code keeps a copy of the same response in `~/.claude.json`,
+  and the widget uses it whenever it is newer than what it has, with no network. It only updates
+  when Claude Code fetches usage itself, so it can be hours old. Turn off **Fetch usage online**
+  to rely on it (and the status line) alone.
 - **The status line.** In the terminal, Claude Code passes plan usage to
   [status line](https://code.claude.com/docs/en/statusline) commands, so setup also registers
   `statusline.js` as your `statusLine`. It prints nothing. If you already had a status line, it is

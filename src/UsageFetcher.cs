@@ -9,17 +9,20 @@ namespace ClaudeStatusBar;
 /// <summary>
 /// Keeps usage.json (read by <see cref="UsageStore"/>) current for clients that never run the
 /// statusLine command, such as the VS Code extension; statusline.js writes the same file from the
-/// CLI. Two modes, chosen by <see cref="Settings.FetchUsageOnline"/>:
+/// CLI. Two sources:
 ///
-/// Online: fetches the plan usage limits from Anthropic's OAuth usage endpoint (the one behind
-/// Claude Code's /usage), using the access token Claude Code keeps in ~/.claude/.credentials.json,
-/// read-only. It never refreshes the token (that would rotate Claude Code's own login); an expired
-/// or rejected token is simply retried later, after Claude Code has refreshed it. The endpoint is
-/// undocumented, so any unexpected response leaves the previous values in place.
+/// Cache (always, no network): the copy of the usage response Claude Code keeps in ~/.claude.json,
+/// used whenever it is newer than what usage.json holds. It only updates when Claude Code itself
+/// fetches usage, so on its own it can be hours old.
 ///
-/// Offline: no network. Reads the copy of that same response Claude Code caches in ~/.claude.json
-/// (refreshed whenever Claude Code itself fetches usage), and only when it is newer than what
-/// usage.json already holds.
+/// Online (when <see cref="Settings.FetchUsageOnline"/> is on): Anthropic's OAuth usage endpoint
+/// (the one behind Claude Code's /usage), using the access token Claude Code keeps in
+/// ~/.claude/.credentials.json, read-only. It never refreshes the token (that would rotate Claude
+/// Code's own login). The endpoint rate-limits frequent callers, so it is polled sparingly: every
+/// <see cref="Settings.UsageRefreshMinutes"/> while Claude Code is active and for one interval
+/// after (to catch a turn's final numbers), not at all while idle, with exponential backoff after
+/// a rate-limit or error response. The endpoint is undocumented, so any unexpected response leaves
+/// the previous values in place.
 ///
 /// Outcomes go to <see cref="UsageLog"/>.
 /// </summary>
@@ -29,8 +32,8 @@ public sealed class UsageFetcher : IDisposable
 
     private const string Endpoint = "https://api.anthropic.com/api/oauth/usage";
 
-    private static readonly TimeSpan Interval = TimeSpan.FromSeconds(60);
-    private static readonly TimeSpan ErrorBackoff = TimeSpan.FromMinutes(5);
+    private static readonly TimeSpan Tick = TimeSpan.FromSeconds(15);     // how often to re-check; cheap, no network
+    private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(30);
 
     private static readonly string Home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
     private static readonly string CredentialsPath = Path.Combine(Home, ".claude", ".credentials.json");
@@ -40,6 +43,12 @@ public sealed class UsageFetcher : IDisposable
     private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
     private readonly CancellationTokenSource _cts = new();
     private readonly SemaphoreSlim _wake = new(0, 1);
+    private readonly StateStore _state = new();
+
+    private DateTime _nextFetch = DateTime.MinValue; // UTC; MinValue fetches on the next tick
+    private bool _fetchedOnce;
+    private int _failures;                            // consecutive failed fetches, for backoff
+    private DateTime _cacheWrite = DateTime.MinValue;
     private string _lastStatus = "";
 
     public UsageFetcher()
@@ -51,9 +60,10 @@ public sealed class UsageFetcher : IDisposable
 
     public void Start() => _ = RunAsync(_cts.Token);
 
-    /// <summary>Run the next update now instead of waiting out the interval (e.g. after a mode change).</summary>
+    /// <summary>Re-evaluate now and allow an immediate fetch (after a settings change).</summary>
     public void Refresh()
     {
+        _nextFetch = DateTime.MinValue;
         if (_wake.CurrentCount == 0) _wake.Release();
     }
 
@@ -63,58 +73,94 @@ public sealed class UsageFetcher : IDisposable
         _http.Dispose();
     }
 
+    private static TimeSpan Interval => TimeSpan.FromMinutes(Math.Clamp(Settings.Shared.UsageRefreshMinutes, 1, 60));
+
     private async Task RunAsync(CancellationToken ct)
     {
         while (!ct.IsCancellationRequested)
         {
-            TimeSpan delay;
-            try { delay = Settings.Shared.FetchUsageOnline ? await FetchOnlineAsync(ct) : ReadCache(); }
+            try { await TickAsync(ct); }
             catch (OperationCanceledException) when (ct.IsCancellationRequested) { return; }
-            catch (Exception ex) { Status("api", $"error: {ex.Message}"); delay = ErrorBackoff; }
+            catch (Exception ex) { Backoff($"error: {ex.Message}", null); }
 
-            try { await _wake.WaitAsync(delay, ct); }
+            try { await _wake.WaitAsync(Tick, ct); }
             catch (OperationCanceledException) { return; }
         }
     }
 
+    private async Task TickAsync(CancellationToken ct)
+    {
+        ReadCacheIfChanged();
+
+        if (!Settings.Shared.FetchUsageOnline)
+        {
+            Status("cache", "online fetching off; using Claude Code's cached usage in ~/.claude.json and the terminal statusLine");
+            return;
+        }
+        if (DateTime.UtcNow < _nextFetch) return;
+        if (_fetchedOnce && !ClaudeActive())
+        {
+            Status("api", "idle: paused until Claude Code is active");
+            return;
+        }
+        await FetchOnlineAsync(ct);
+    }
+
+    // Active while a turn is running, and for one interval (plus a minute) after the last hook
+    // event, so the fetch that follows a turn still happens.
+    private bool ClaudeActive()
+    {
+        var s = _state.Poll();
+        if (s.State is "thinking" or "tool" or "permission") return true;
+        double sinceLastEvent = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - s.Ts;
+        return sinceLastEvent < (Interval + TimeSpan.FromMinutes(1)).TotalSeconds;
+    }
+
     // ----- online: usage endpoint -----
 
-    /// <summary>One fetch; returns how long to wait before the next.</summary>
-    private async Task<TimeSpan> FetchOnlineAsync(CancellationToken ct)
+    private async Task FetchOnlineAsync(CancellationToken ct)
     {
+        _fetchedOnce = true;
         var token = ReadAccessToken();
         if (token is null)
         {
+            _nextFetch = DateTime.UtcNow + Interval;
             Status("api", "skipped: no valid claude.ai sign-in token (not signed in, or expired until Claude Code refreshes it)");
-            return Interval;
+            return;
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint);
         request.Headers.Authorization = new("Bearer", token);
         using var response = await _http.SendAsync(request, ct);
 
-        if (response.StatusCode == HttpStatusCode.TooManyRequests)
-        {
-            var retry = response.Headers.RetryAfter?.Delta ?? ErrorBackoff;
-            if (retry < Interval) retry = Interval;
-            Status("api", $"rate limited (429), retrying in {retry.TotalSeconds:0}s");
-            return retry;
-        }
         if (!response.IsSuccessStatusCode)
         {
-            Status("api", $"HTTP {(int)response.StatusCode}, retrying in {ErrorBackoff.TotalMinutes:0} min");
-            return ErrorBackoff;
+            var reason = response.StatusCode == HttpStatusCode.TooManyRequests ? "rate limited (429)" : $"HTTP {(int)response.StatusCode}";
+            Backoff(reason, response.Headers.RetryAfter?.Delta);
+            return;
         }
 
         using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync(ct));
         if (ToUsage(doc.RootElement) is not { } usage)
         {
-            Status("api", "unrecognized response");
-            return Interval;
+            Backoff("unrecognized response", null);
+            return;
         }
-        Status("api", $"ok, polling every {Interval.TotalSeconds:0}s");
+        _failures = 0;
+        _nextFetch = DateTime.UtcNow + Interval;
+        Status("api", $"ok, refreshing every {Interval.TotalMinutes:0} min while Claude Code is active");
         Write(usage, "api", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
-        return Interval;
+    }
+
+    // Wait interval × 2^failures (at least Retry-After, at most MaxBackoff) before the next try.
+    private void Backoff(string reason, TimeSpan? retryAfter)
+    {
+        _failures++;
+        var wait = TimeSpan.FromTicks(Interval.Ticks * (1L << Math.Min(_failures, 5)));
+        if (retryAfter > wait) wait = retryAfter.Value;
+        if (wait > MaxBackoff) wait = MaxBackoff;
+        _nextFetch = DateTime.UtcNow + wait;
+        Status("api", $"{reason}, next try in {wait.TotalMinutes:0} min");
     }
 
     private static string? ReadAccessToken()
@@ -132,25 +178,27 @@ public sealed class UsageFetcher : IDisposable
         catch { return null; }
     }
 
-    // ----- offline: Claude Code's cache -----
+    // ----- cache: Claude Code's copy in ~/.claude.json -----
 
-    private TimeSpan ReadCache()
+    private void ReadCacheIfChanged()
     {
-        Status("cache", "online fetching off; using Claude Code's cached usage in ~/.claude.json and the terminal statusLine");
         try
         {
+            var info = new FileInfo(ClaudeJsonPath);
+            if (!info.Exists || info.LastWriteTimeUtc == _cacheWrite) return;
+
             using var doc = JsonDocument.Parse(File.ReadAllText(ClaudeJsonPath));
+            _cacheWrite = info.LastWriteTimeUtc; // only after a successful read, so a failed one retries
             if (!doc.RootElement.TryGetProperty("cachedUsageUtilization", out var cache) ||
                 !cache.TryGetProperty("fetchedAtMs", out var at) || at.ValueKind != JsonValueKind.Number ||
                 !cache.TryGetProperty("utilization", out var utilization) ||
                 ToUsage(utilization) is not { } usage)
-                return Interval;
+                return;
 
             long fetchedAt = (long)(at.GetDouble() / 1000);
             if (fetchedAt > ReadUsageTimestamp()) Write(usage, "cache", fetchedAt);
         }
-        catch { } // missing, or mid-write by Claude Code; try again next round
-        return Interval;
+        catch { } // mid-write by Claude Code; try again next tick
     }
 
     private static double ReadUsageTimestamp()

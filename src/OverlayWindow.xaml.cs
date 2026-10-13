@@ -457,6 +457,9 @@ public partial class OverlayWindow : Window
         MiTimer.IsChecked = _settings.ShowTimer;
         MiUsage.IsChecked = _settings.ShowUsageBars;
         MiUsageOnline.IsChecked = _settings.FetchUsageOnline;
+        MiUsageRefresh.IsEnabled = _settings.FetchUsageOnline;
+        foreach (var item in MiUsageRefresh.Items.OfType<MenuItem>())
+            item.IsChecked = item.Tag is string t && t == _settings.UsageRefreshMinutes.ToString();
         MiSound.IsChecked = _settings.PlayCompletionSound;
         MiStyleSpark.IsChecked = _settings.Style == AnimStyle.Spark;
         MiStyleCode.IsChecked = _settings.Style == AnimStyle.Code;
@@ -486,6 +489,15 @@ public partial class OverlayWindow : Window
         _settings.FetchUsageOnline = !_settings.FetchUsageOnline;
         _settings.Save();
         UsageFetcher.Instance?.Refresh(); // switch sources now rather than at the next poll
+        OverlayManager.Instance?.SyncAll();
+    }
+
+    private void OnUsageRefresh(object sender, RoutedEventArgs e)
+    {
+        if (sender is not MenuItem { Tag: string tag } || !int.TryParse(tag, out int minutes)) return;
+        _settings.UsageRefreshMinutes = minutes;
+        _settings.Save();
+        UsageFetcher.Instance?.Refresh();
         OverlayManager.Instance?.SyncAll();
     }
 
