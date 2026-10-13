@@ -102,3 +102,30 @@ public class SessionNamesTests
         Assert.Equal("Claude · 2", names["2"]);
     }
 }
+
+public class SessionTextTests
+{
+    [Theory]
+    [InlineData("thinking", "", "", "Thinking…")]
+    [InlineData("tool", "Editing", "", "Editing")]
+    [InlineData("tool", "", "", "Working…")]
+    [InlineData("permission", "", "", "Awaiting permission")]
+    [InlineData("permission", "", "Bash", "Awaiting permission · Bash")]
+    [InlineData("permission", "", "Claude needs your permission to use Write", "Awaiting permission · Write")]
+    [InlineData("done", "", "", "Done")]
+    [InlineData("idle", "", "", "Idle")]
+    [InlineData("whatever", "", "", "Idle")]
+    public void Status_reads_naturally(string state, string label, string detail, string expected) =>
+        Assert.Equal(expected, SessionText.Status(new ClaudeState { State = state, Label = label, Detail = detail }));
+
+    [Theory]
+    [InlineData(0, "0s")]
+    [InlineData(-5, "0s")]
+    [InlineData(59.9, "59s")]
+    [InlineData(60, "1m 0s")]
+    [InlineData(192, "3m 12s")]
+    [InlineData(3600, "1h 00m")]
+    [InlineData(3900, "1h 05m")]
+    public void Durations_are_compact(double seconds, string expected) =>
+        Assert.Equal(expected, SessionText.Duration(seconds));
+}

@@ -68,13 +68,12 @@
             <TextBlock x:Name="StatusText" Grid.Column="1" VerticalAlignment="Center" FontSize="12"
                        TextTrimming="CharacterEllipsis" TextAlignment="Left"
                        Foreground="#FFF0F0F0" Text="Claude"/>
-            <!-- One dot per session when several run at once; built in code, with a tooltip
-                 listing every session. As tall as the usage bars, so the hover target is easy to
-                 hit and the tooltip clears the pill the same way. -->
+            <!-- One dot per session when several run at once; built in code. Resting the mouse
+                 here opens the sessions panel (SessionsPanel). As tall as the usage bars, so the
+                 hover target is easy to hit. -->
             <StackPanel x:Name="SessionDots" Grid.Column="3" Orientation="Horizontal" Margin="6,0,0,0" Height="18"
                         VerticalAlignment="Center" Background="Transparent" Visibility="Collapsed"
-                        ToolTipService.Placement="Top" ToolTipService.VerticalOffset="-10"
-                        ToolTipService.InitialShowDelay="300"/>
+                        Cursor="Hand"/>
             <!-- Usage limits: 5-hour window (left) and weekly window (right), filled bottom-up.
                  Fill heights, colors, and the tooltip are set in code. -->
             <StackPanel x:Name="UsageBars" Grid.Column="4" Orientation="Horizontal" Margin="6,0,0,0"

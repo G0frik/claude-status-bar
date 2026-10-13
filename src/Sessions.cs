@@ -119,3 +119,36 @@ public static class SessionNames
         return names;
     }
 }
+
+/// <summary>How a session's status and durations read in the panel and notifications.</summary>
+public static class SessionText
+{
+    public static string Status(ClaudeState s) => s.State switch
+    {
+        "thinking" => "Thinking…",
+        "tool" => string.IsNullOrEmpty(s.Label) ? "Working…" : s.Label,
+        "permission" => string.IsNullOrEmpty(s.Detail) ? "Awaiting permission" : $"Awaiting permission · {PermissionSubject(s.Detail)}",
+        "done" => "Done",
+        _ => "Idle",
+    };
+
+    /// <summary>
+    /// What a permission request is for, short: the tool name as recorded, or the tool taken
+    /// from a notification message ("Claude needs your permission to use Bash" → "Bash").
+    /// </summary>
+    public static string PermissionSubject(string detail)
+    {
+        const string marker = " use ";
+        int at = detail.LastIndexOf(marker, StringComparison.OrdinalIgnoreCase);
+        return at >= 0 ? detail[(at + marker.Length)..].Trim().TrimEnd('.') : detail.Trim();
+    }
+
+    /// <summary>"42s", "3m 12s", "1h 05m".</summary>
+    public static string Duration(double seconds)
+    {
+        int s = Math.Max(0, (int)seconds);
+        if (s < 60) return $"{s}s";
+        if (s < 3600) return $"{s / 60}m {s % 60}s";
+        return $"{s / 3600}h {s % 3600 / 60:00}m";
+    }
+}

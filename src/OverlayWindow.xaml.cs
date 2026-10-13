@@ -76,8 +76,9 @@ public partial class OverlayWindow : Window
     private DateTime _noticeUntil;
 
     private string? _focusId;               // session the icon/label/timer follow
-    private string _dotsSignature = "";     // what the dots currently show; rebuilt when it changes
-    private readonly TextBlock _sessionsTip = new();
+    private int _dotsSignature;             // what the dots currently show (0: none); rebuilt when it changes
+    private SessionsPanel? _panel;          // created on first hover
+    private string? _hoveredDotId;
     private readonly SolidColorBrush _dotWorking = new(Brand); // pulses while a working dot shows
     private bool _pulsing;
 
@@ -91,7 +92,9 @@ public partial class OverlayWindow : Window
         _isController = isController;
         InitializeComponent();
         UsageBars.ToolTip = TrackedToolTip(_usageTip);
-        SessionDots.ToolTip = TrackedToolTip(_sessionsTip);
+        SessionDots.MouseEnter += (_, _) => Panel().PointerEntered();
+        SessionDots.MouseLeave += (_, _) => { _panel?.PointerLeft(); HoverDot(null); };
+        SessionDots.MouseMove += (_, e) => HoverDot((e.OriginalSource as FrameworkElement)?.Tag as string);
         Menu.Opened += (_, _) => _openPopups++;
         Menu.Closed += (_, _) => PopupClosed();
         SourceInitialized += OnSourceInitialized;
@@ -194,6 +197,7 @@ public partial class OverlayWindow : Window
         _startedAt = state.StartedAt;
         MaybeChime(sessions);
         UpdateDots(sessions, state);
+        if (_panel is { IsOpen: true }) _panel.Refresh(sessions, _focusId); // only fed while visible
 
         switch (state.State)
         {
@@ -322,13 +326,7 @@ public partial class OverlayWindow : Window
 
     private void UpdateTimer()
     {
-        TimerText.Text = _settings.ShowTimer && _startedAt > 0 ? Elapsed(_startedAt) : "";
-    }
-
-    private static string Elapsed(double startedAt)
-    {
-        int secs = Math.Max(0, (int)(DateTimeOffset.UtcNow.ToUnixTimeSeconds() - startedAt));
-        return secs >= 60 ? $"{secs / 60}m {secs % 60}s" : $"{secs}s";
+        TimerText.Text = _settings.ShowTimer && _startedAt > 0 ? SessionText.Duration(StateStore.UnixNow() - _startedAt) : "";
     }
 
     // ----- session dots -----
@@ -347,16 +345,14 @@ public partial class OverlayWindow : Window
     {
         if (sessions.Count < 2)
         {
-            if (_dotsSignature.Length == 0) return;
-            _dotsSignature = "";
+            if (_dotsSignature == 0) return;
+            _dotsSignature = 0;
             SessionDots.Children.Clear();
             SessionDots.Visibility = Visibility.Collapsed;
+            _panel?.Close();
             SetPulse(false);
             return;
         }
-
-        var tip = SessionsTipText(sessions, focus);
-        if (_sessionsTip.Text != tip) _sessionsTip.Text = tip; // updated in place, so timers tick while open
 
         // With more sessions than dots, show the ones that most need attention, in their usual order.
         var shown = sessions.Count <= MaxDots
@@ -366,7 +362,11 @@ public partial class OverlayWindow : Window
                       .Take(MaxDots - 1).OrderBy(x => x.i).Select(x => x.s).ToList();
         int hidden = sessions.Count - shown.Count;
 
-        var signature = string.Join(",", shown.Select(s => $"{s.SessionId}:{KindOf(s.State)}")) + $"|{focus.SessionId}|{hidden}";
+        var hash = new HashCode();
+        foreach (var s in shown) { hash.Add(s.SessionId); hash.Add(KindOf(s.State)); }
+        hash.Add(focus.SessionId);
+        hash.Add(hidden);
+        int signature = hash.ToHashCode() | 1; // never 0, which means "no dots"
         if (signature == _dotsSignature) return;
         _dotsSignature = signature;
 
@@ -380,7 +380,48 @@ public partial class OverlayWindow : Window
                 VerticalAlignment = VerticalAlignment.Center,
             });
         SessionDots.Visibility = Visibility.Visible;
-        SetPulse(shown.Any(s => KindOf(s.State) == DotKind.Working));
+        HoverDot(_hoveredDotId);
+        // Any working session, shown or behind "+N": the panel's dots share this brush.
+        SetPulse(sessions.Any(s => KindOf(s.State) == DotKind.Working));
+    }
+
+    private Brush DotBrush(string state) => KindOf(state) switch
+    {
+        DotKind.Working => _dotWorking,
+        DotKind.Permission => DotPermission,
+        _ => DotIdle,
+    };
+
+    private SessionsPanel Panel()
+    {
+        if (_panel is not null) return _panel;
+        _panel = new SessionsPanel(Root, DotBrush);
+        _panel.Opened += () => { _openPopups++; _panel.Refresh(_sessionsNow, _focusId); };
+        _panel.Closed += () => { PopupClosed(); HoverDot(null); };
+        _panel.RowClicked += OpenSession;
+        _panel.HighlightChanged += id => RingDot(id);
+        return _panel;
+    }
+
+    // The dot under the mouse: ring it on the pill and highlight its row in the panel.
+    private void HoverDot(string? sessionId)
+    {
+        _hoveredDotId = sessionId;
+        RingDot(sessionId);
+        _panel?.SetHighlight(sessionId);
+    }
+
+    // Enlarge and ring one dot (null: none); the focused session's dot keeps its ring.
+    private void RingDot(string? sessionId)
+    {
+        foreach (var child in SessionDots.Children)
+        {
+            if (child is not Border { Tag: string id, Child: Ellipse dot }) continue;
+            bool hovered = id == sessionId;
+            dot.Width = dot.Height = hovered ? DotSize + 2 : DotSize;
+            dot.Stroke = hovered || id == _focusId ? DotFocusRing : null;
+            dot.StrokeThickness = dot.Stroke is null ? 0 : 1;
+        }
     }
 
     // The dot sits in a transparent, full-height hit box tagged with its session, so a click
@@ -411,24 +452,6 @@ public partial class OverlayWindow : Window
         _dotWorking.BeginAnimation(Brush.OpacityProperty, on
             ? new DoubleAnimation(1, 0.55, TimeSpan.FromMilliseconds(900)) { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever }
             : null);
-    }
-
-    private static string SessionsTipText(IReadOnlyList<ClaudeState> sessions, ClaudeState focus)
-    {
-        var names = SessionNames.Build(sessions);
-        return string.Join("\n", sessions.Select(s =>
-        {
-            var label = s.State switch
-            {
-                "thinking" => "Thinking…",
-                "tool" => string.IsNullOrEmpty(s.Label) ? "Working…" : s.Label,
-                "permission" => "Awaiting permission",
-                "done" => "Done",
-                _ => "Idle",
-            };
-            if (s.State is "thinking" or "tool" && s.StartedAt > 0) label += $" · {Elapsed(s.StartedAt)}";
-            return $"{(s.SessionId == focus.SessionId ? "▸" : "  ")} {names[s.SessionId]} — {label}";
-        }));
     }
 
     // ----- usage limits -----
