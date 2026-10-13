@@ -26,9 +26,6 @@ internal sealed class ToastWindow : Window
     private static readonly Brush NameText = Frozen(Color.FromRgb(0xF0, 0xF0, 0xF0));
     private static readonly Brush DetailText = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0));
 
-    // Rendered once and shared by every notification.
-    private static ImageSource? _permissionIcon, _finishedIcon;
-
     private readonly TextBlock _closeMark;
     private DispatcherTimer? _autoClose;
 
@@ -62,7 +59,7 @@ internal sealed class ToastWindow : Window
         var icon = new Image
         {
             Width = 18, Height = 18, Margin = new Thickness(0, 0, 10, 0), VerticalAlignment = VerticalAlignment.Center,
-            Source = permission ? _permissionIcon ??= IconRenderer.Dot(amber) : _finishedIcon ??= IconRenderer.Logo(brand),
+            Source = permission ? IconRenderer.Dot(amber) : IconRenderer.Logo(brand), // rendered once, shared
         };
         RenderOptions.SetBitmapScalingMode(icon, BitmapScalingMode.HighQuality);
 

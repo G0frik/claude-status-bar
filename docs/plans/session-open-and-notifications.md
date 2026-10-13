@@ -309,3 +309,47 @@ _Spike results, measurements and any deviations from this plan go here as work p
   cleanup.
 - Still to observe in real use: that PermissionRequest carries `tool_name` (`detail`) in the
   extension, and the Windows Terminal CLI case.
+
+### Steps 3–5: open, panel, notifications
+
+Implemented as planned, with these differences:
+
+- **No per-session window cache.** A lookup is one process snapshot plus one `EnumWindows`
+  (a smoke test bounds it under 250 ms; in practice a few ms) and runs only on a click or a
+  notification event, so a fresh lookup each time is simpler and never stale.
+- **Panel and notifications are built in code** (`SessionsPanel.cs`, `ToastWindow.cs`), not XAML:
+  they are small and mostly dynamic.
+- **"Can't find its window"** shows briefly in place of the label, which also covers clicks on
+  the pill when no panel is open.
+- **Escape doesn't close the panel:** the widget never takes keyboard focus. Moving the mouse away
+  or clicking closes it.
+- **Notifications have a fixed height** (52 DIPs), so stacking is arithmetic with no layout pass.
+
+### Performance
+
+The plan assumed `IconRenderer` already shared its images. It didn't: `Dot()`, `Logo()` and
+`Spark()` rendered a new bitmap on every call. That happened every 400 ms poll while idle or
+awaiting permission, and every animation frame (9/s) while working. Under the 20-session load
+this pushed GDI objects from 18 to a peak of 89. Tinted images are now rendered once per (image,
+color) and reused.
+
+Measured with `tools/measure.ps1`. Each run is a fresh widget with 20 simulated sessions for
+50 s, sampled for 60 s; values are MB of private memory unless noted.
+
+| Build / setting | Peak private | End private | Peak GDI | Avg CPU |
+|---|---|---|---|---|
+| Before the icon cache | 158.8 | 140.2 | 89 | 0.94 % |
+| Icon cache (run 1 / run 2) | 141.6 / 129.9 | 136.9 / 127.4 | 30 / 25 | 0.84 / 0.64 % |
+| + `gcConcurrent=0` (run 1 / run 2) | 131.5 / 149.9 | 130.2 / 132.8 | 37 / 31 | 0.84 / 0.85 % |
+| + `GCConserveMemory=7` | 130.0 | 126.5 | 25 | 0.51 % |
+| + both | 129.0 | 127.1 | 25 | 0.53 % |
+
+The GC settings stay within run-to-run noise (about ±10 MB), so neither was applied. Idle, the
+new build used less than the old baseline: 115 MB private, 1,663 handles, 18 GDI and 28 USER
+objects, against 130 MB, 2,127, 31 and 41. That compares a fresh widget with one that had been
+running for hours, so take it as "no regression" rather than a gain.
+
+**Pending, needs the desktop free (it moves the mouse and changes the foreground window):**
+`check-ui.ps1` `open`, `panel`, `notify` and `menu`, and the leak run of 100 panel opens and 100
+notifications. During development the user was in a fullscreen game. There, Windows reported
+`QUNS_BUSY`, the state in which notifications must be (and are, by policy) suppressed.

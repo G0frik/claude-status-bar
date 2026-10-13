@@ -96,3 +96,18 @@ public class StateStoreTests : IDisposable
         Assert.Equal(2, new StateStore(_dir.Path).SessionCount());
     }
 }
+
+public class IconRendererTests
+{
+    [Fact]
+    public void Tinted_icons_and_dots_are_rendered_once_and_reused()
+    {
+        var orange = System.Windows.Media.Color.FromRgb(0xD9, 0x77, 0x57);
+        var amber = System.Windows.Media.Color.FromRgb(0xF2, 0xBA, 0x2E);
+        Assert.Same(IconRenderer.Logo(orange), IconRenderer.Logo(orange));
+        Assert.Same(IconRenderer.Spark(1, orange), IconRenderer.Spark(1, orange));
+        Assert.Same(IconRenderer.Dot(amber), IconRenderer.Dot(amber));
+        Assert.NotSame(IconRenderer.Dot(amber), IconRenderer.Dot(orange));
+        Assert.NotSame(IconRenderer.Logo(orange), IconRenderer.Dot(orange));
+    }
+}

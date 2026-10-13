@@ -30,15 +30,24 @@ taskbar and resizes itself so it never overlaps the notification tray.
   a small dot per session appears after the timer: orange (pulsing) while working, yellow while
   awaiting permission, grey when idle. The icon, label and timer follow one session, ringed among
   the dots: the one awaiting permission first, otherwise the one already shown, so a session that
-  starts working later doesn't take over. Beyond five sessions the dots end in `+N`. Hover the dots
-  for every session's project, status and timer.
+  starts working later doesn't take over. Beyond five sessions the dots end in `+N`. Rest the mouse
+  on the dots to open a panel listing every session (project, status, timer); the row of the dot
+  under the mouse is highlighted.
+- **Open a session** — left-click a dot or a panel row to bring that session's window (VS Code,
+  Antigravity, Windows Terminal, console) to the front; left-click anywhere else on the widget
+  opens the session the label shows. The window comes forward, but not the specific chat or
+  terminal tab inside it.
+- **Notifications** — a small popup above the widget when a session needs permission (it stays
+  until the session moves on) or finishes a turn of 20 seconds or more. It never takes focus, is
+  skipped for the session whose window is already in front and while a fullscreen app,
+  presentation or Focus Assist is on, and opens the session when clicked.
 
 The widget tracks the taskbar height and DPI, and anchors itself just before the tray, reflowing
 when tray icons appear or disappear.
 
 ## Menu
 
-Click the widget (either mouse button) to open its menu:
+Right-click the widget to open its menu:
 
 - **Show timer** — toggle the elapsed-time readout.
 - **Show usage limits** — toggle the usage bars.
@@ -46,6 +55,8 @@ Click the widget (either mouse button) to open its menu:
   [How it works](#how-it-works)).
 - **Refresh usage every** — 2, 5 (default), 10, or 15 minutes between online fetches.
 - **Play Completion Sound** — a chime when a turn finishes.
+- **Notifications** — turn notifications off, or choose which: when a session needs permission,
+  when a turn finishes.
 - **Animation** — Claude Spark, Claude Code, or Crab Walking.
 - **Show on** — choose which monitors display the widget (defaults to the primary monitor).
 - **Quit** — close the widget; it returns on your next Claude Code session.

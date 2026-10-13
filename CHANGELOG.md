@@ -8,13 +8,30 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Open a session from the widget: left-click a session's dot, a row of the new sessions panel, or
+  the widget itself to bring that session's window to the front. The hooks now run in exec form
+  and record each session's Claude Code process, from which the widget finds the window.
+- Sessions panel: resting the mouse on the dots lists every session, with the hovered dot's row
+  highlighted. Replaces the dots tooltip.
+- Notifications in the widget's style when a session needs permission or finishes a turn of
+  20 s or more, with a Notifications submenu. They never take focus and respect fullscreen apps,
+  presentation mode and Focus Assist.
+- `tools/measure.ps1` for memory and handle leak checks.
+
 - Several sessions at once: one dot per Claude Code session (working, awaiting permission, idle),
   with a tooltip listing each session's project, status and timer. The icon, label and timer follow
   the session that needs attention and no longer jump to whichever session started last.
 - Unit tests for the app (xUnit) and the hooks (`node:test`), run in CI, plus
   `tools/simulate-sessions.js` and `tools/check-ui.ps1` for load and popup checks.
 
+### Changed
+
+- Right-click opens the menu; left-click now opens a session.
+
 ### Fixed
+
+- Status icons were re-rendered on every poll and animation frame (a new bitmap each time); they
+  are now rendered once and reused, which keeps GDI objects and peak memory down under load.
 
 - Tooltips and the menu were partly hidden behind the widget, which re-asserted its top-most
   position every poll; it now waits while a popup is open.

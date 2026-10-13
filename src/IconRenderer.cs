@@ -8,10 +8,14 @@ namespace ClaudeStatusBar;
 /// <summary>
 /// Builds the 18x18 status icons. Spark frames and the resting logo are alpha masks tinted with
 /// a solid color; crab frames are full-color sprites used as-is. Decoded sources are frozen and
-/// cached at load.
+/// cached at load; tinted icons and dots are rendered once per (image, color) and reused, since
+/// they are requested on every poll tick and animation frame. Called from the UI thread only.
 /// </summary>
 internal static class IconRenderer
 {
+    // A handful of entries at most: the spark frames and the logo in one or two colors, plus dots.
+    private static readonly Dictionary<(BitmapSource? Mask, Color Color), ImageSource> Rendered = new();
+
     private static readonly BitmapSource[] SparkMasks = Decode(Frames.Spark);
     private static readonly BitmapSource[] CrabSprites = Decode(Frames.Crab);
     private static readonly BitmapSource LogoMask = Decode(new[] { Frames.Logo })[0];
@@ -54,19 +58,21 @@ internal static class IconRenderer
     /// <summary>Filled dot used for the awaiting-permission state.</summary>
     public static ImageSource Dot(Color color)
     {
+        if (Rendered.TryGetValue((null, color), out var cached)) return cached;
         var dv = new DrawingVisual();
         using (var dc = dv.RenderOpen())
             dc.DrawEllipse(new SolidColorBrush(color), null, new Point(9, 9), 4.5, 4.5);
         var rtb = new RenderTargetBitmap(18, 18, 96, 96, PixelFormats.Pbgra32);
         rtb.Render(dv);
         rtb.Freeze();
-        return rtb;
+        return Rendered[(null, color)] = rtb;
     }
 
     // Fill a solid color through the mask's alpha. A null color returns the mask unchanged.
     private static ImageSource Tint(BitmapSource mask, Color? color)
     {
         if (color is null) return mask;
+        if (Rendered.TryGetValue((mask, color.Value), out var cached)) return cached;
 
         const int size = 18;
         var visual = new DrawingVisual();
@@ -79,6 +85,6 @@ internal static class IconRenderer
         var bitmap = new RenderTargetBitmap(size, size, 96, 96, PixelFormats.Pbgra32);
         bitmap.Render(visual);
         bitmap.Freeze();
-        return bitmap;
+        return Rendered[(mask, color.Value)] = bitmap;
     }
 }
