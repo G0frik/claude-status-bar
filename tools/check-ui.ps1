@@ -103,17 +103,23 @@ $point = switch ($Target) {
 
 if ($Target -eq "notify") {
     $other = Start-Process notepad -PassThru
-    $seen = 0; $most = 0; $stolen = @()
+    $seen = 0; $most = 0; $stolen = @(); $misaligned = 0
+    $pillRect = $null
     try {
         Start-Sleep -Milliseconds 1200
         $front = [ZOrder]::GetForegroundWindow()
+        # The pill is right-aligned in the widget window, so its right edge is the window's.
+        $pillRect = [pscustomobject]@{ R = $widget.Rect.R }
         $deadline = (Get-Date).AddSeconds($WaitSeconds)
         while ((Get-Date) -lt $deadline) {
             Start-Sleep -Milliseconds 250
             $null, $popups = Get-WidgetWindows
-            # Notifications: 300x52 DIP windows of the widget process.
+            # Notifications: 52 DIPs tall and as wide as the pill (220-320 DIPs) windows of the widget process.
             $toasts = @($popups | Where-Object {
-                [math]::Abs(($_.Rect.R - $_.Rect.L) - 300 * $scale) -le 2 -and [math]::Abs(($_.Rect.B - $_.Rect.T) - 52 * $scale) -le 2 })
+                $w = $_.Rect.R - $_.Rect.L
+                [math]::Abs(($_.Rect.B - $_.Rect.T) - 52 * $scale) -le 2 -and $w -ge 220 * $scale -and $w -le 320 * $scale })
+            # ...and aligned with the pill: same width and right edge for all of them.
+            foreach ($t in $toasts) { if ($null -ne $pillRect -and [math]::Abs($t.Rect.R - $pillRect.R) -gt 2) { $misaligned++ } }
             if ($toasts.Count -gt 0) { $seen++ }
             if ($toasts.Count -gt $most) { $most = $toasts.Count }
             $now = [ZOrder]::GetForegroundWindow()
@@ -121,9 +127,9 @@ if ($Target -eq "notify") {
         }
     }
     finally { Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue }
-    $ok = $seen -gt 0 -and $most -le 3 -and $stolen.Count -eq 0
+    $ok = $seen -gt 0 -and $most -le 3 -and $stolen.Count -eq 0 -and $misaligned -eq 0
     Write-Host "$(if ($ok) { 'PASS' } else { 'FAIL' }) (notify)"
-    Write-Host "  polls with a notification: $seen; most at once: $most"
+    Write-Host "  polls with a notification: $seen; most at once: $most; not aligned with the pill: $misaligned"
     if ($stolen) { Write-Host "  foreground changed to: $($stolen -join ', ')" }
     if ($ok) { exit 0 } else { exit 1 }
 }

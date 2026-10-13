@@ -107,7 +107,8 @@ New `src/SessionWindows.cs`:
 - **`src/ToastWindow.xaml(.cs)`:**
   - Borderless, transparent, topmost, `ShowActivated=false`, with
     `WS_EX_NOACTIVATE | WS_EX_TOOLWINDOW`, so it never steals focus or appears in Alt-Tab.
-  - About 300 px wide, styled like the panel.
+  - As wide as the pill and aligned with it, following it as dots and usage bars change its
+    width (originally a fixed 300 px), styled like the panel.
   - **Content:** an 18 px icon (amber dot for permission, the Claude mark for finished); the
     project name; a detail line ("Needs permission · Bash", "Finished · 3m 12s"); a `×` that
     shows on hover.

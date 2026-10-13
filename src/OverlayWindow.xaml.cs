@@ -96,6 +96,7 @@ public partial class OverlayWindow : Window
         SessionDots.MouseEnter += (_, _) => Panel().PointerEntered();
         SessionDots.MouseLeave += (_, _) => { _panel?.PointerLeft(); HoverDot(null); };
         SessionDots.MouseMove += (_, e) => HoverDot((e.OriginalSource as FrameworkElement)?.Tag as string);
+        Root.SizeChanged += (_, _) => _toasts?.Layout(); // notifications keep the pill's width
         Menu.Opened += (_, _) => _openPopups++;
         Menu.Closed += (_, _) => PopupClosed();
         SourceInitialized += OnSourceInitialized;
@@ -576,7 +577,9 @@ public partial class OverlayWindow : Window
     private ToastManager Toasts()
     {
         if (_toasts is not null) return _toasts;
-        _toasts = new ToastManager(() => (Left + Width, Top + Root.Margin.Top), Brand, Amber);
+        // The pill is right-aligned in the (wider, transparent) window, so its left edge is
+        // the window's right edge minus the pill's width.
+        _toasts = new ToastManager(() => (Left + Width - Root.ActualWidth, Root.ActualWidth, Top + Root.Margin.Top), Brand, Amber);
         _toasts.OpenRequested += id =>
         {
             var session = _sessionsNow.FirstOrDefault(s => s.SessionId == id);

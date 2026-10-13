@@ -17,7 +17,6 @@ namespace ClaudeStatusBar;
 /// </summary>
 internal sealed class ToastWindow : Window
 {
-    public const double ToastWidth = 300;
     public const double ToastHeight = 52;
     private static readonly TimeSpan AutoCloseAfter = TimeSpan.FromSeconds(6);
 
@@ -48,8 +47,7 @@ internal sealed class ToastWindow : Window
         ShowActivated = false;
         Focusable = false;
         ResizeMode = ResizeMode.NoResize;
-        Width = ToastWidth;
-        Height = ToastHeight;
+        Height = ToastHeight; // the width follows the pill (ToastManager.Layout)
 
         bool permission = e.Kind == SessionEventKind.PermissionRequested;
         var detail = permission
@@ -114,10 +112,11 @@ internal sealed class ToastWindow : Window
         }
     }
 
-    public void ShowAt(double left, double top)
+    public void ShowAt(double left, double top, double width)
     {
         Left = left;
         Top = top;
+        Width = width;
         Show();
         BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(150)) { FillBehavior = FillBehavior.Stop });
         _autoClose?.Start();
@@ -155,23 +154,23 @@ internal sealed class ToastWindow : Window
 }
 
 /// <summary>
-/// Shows notifications stacked above the widget (newest nearest it, at most
-/// <see cref="ToastLayout.MaxToasts"/>), one per session, and keeps them there when the widget
-/// moves. Windows exist only while shown.
+/// Shows notifications stacked above the pill (newest nearest it, at most
+/// <see cref="ToastLayout.MaxToasts"/>), one per session, as wide as the pill and aligned with
+/// it; they follow it when it moves or changes width. Windows exist only while shown.
 /// </summary>
 internal sealed class ToastManager
 {
     private readonly List<ToastWindow> _toasts = new(); // newest first
-    private readonly Func<(double Right, double Top)> _anchor;
+    private readonly Func<(double Left, double Width, double Top)> _pill;
     private readonly Color _brand, _amber;
 
     /// <summary>A notification was clicked: open this session.</summary>
     public event Action<string>? OpenRequested;
 
-    /// <param name="anchor">The pill's right edge and top, in DIPs.</param>
-    public ToastManager(Func<(double Right, double Top)> anchor, Color brand, Color amber)
+    /// <param name="pill">The pill's left edge, width and top, in DIPs.</param>
+    public ToastManager(Func<(double Left, double Width, double Top)> pill, Color brand, Color amber)
     {
-        _anchor = anchor;
+        _pill = pill;
         _brand = brand;
         _amber = amber;
     }
@@ -202,18 +201,20 @@ internal sealed class ToastManager
         foreach (var toast in _toasts.ToList()) Close(toast);
     }
 
-    /// <summary>Place every notification; call when one is added or removed, or the widget moves.</summary>
+    /// <summary>Place every notification; call when one is added or removed, or the pill moves or resizes.</summary>
     public void Layout()
     {
         if (_toasts.Count == 0) return;
-        var (right, top) = _anchor();
-        var tops = ToastLayout.Tops(top, _toasts.Select(_ => ToastWindow.ToastHeight).ToList());
+        var (left, width, top) = _pill();
+        var bounds = ToastLayout.Place(left, width, top, _toasts.Count, ToastWindow.ToastHeight);
         for (int i = 0; i < _toasts.Count; i++)
         {
             var toast = _toasts[i];
-            double left = right - ToastWindow.ToastWidth;
-            if (toast.IsVisible) { toast.Left = left; toast.Top = tops[i]; }
-            else toast.ShowAt(left, tops[i]);
+            var b = bounds[i];
+            if (!toast.IsVisible) { toast.ShowAt(b.Left, b.Top, b.Width); continue; }
+            if (toast.Left != b.Left) toast.Left = b.Left;  // skip no-op moves: each one is a window move
+            if (toast.Top != b.Top) toast.Top = b.Top;
+            if (toast.Width != b.Width) toast.Width = b.Width;
         }
     }
 

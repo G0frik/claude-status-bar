@@ -130,3 +130,25 @@ public class ToastLayoutTests
         Assert.Empty(ToastLayout.Tops(1000, []));
     }
 }
+
+public class ToastPlacementTests
+{
+    [Theory]
+    [InlineData(1400, 247)]   // one session with usage bars
+    [InlineData(1360, 287)]   // five sessions: dots widen the pill
+    public void Notifications_take_the_pills_width_and_edges(double pillLeft, double pillWidth)
+    {
+        var placed = ToastLayout.Place(pillLeft, pillWidth, pillTop: 1043, count: 2, height: 52);
+        Assert.All(placed, p => { Assert.Equal(pillLeft, p.Left); Assert.Equal(pillWidth, p.Width); });
+        Assert.Equal(1043 - 6 - 52, placed[0].Top);
+        Assert.Equal(1043 - 6 - 52 - 6 - 52, placed[1].Top);
+    }
+
+    [Fact]
+    public void An_unmeasured_or_tiny_pill_still_gets_a_readable_width_aligned_right()
+    {
+        var placed = ToastLayout.Place(pillLeft: 1500, pillWidth: 0, pillTop: 1043, count: 1, height: 52);
+        Assert.Equal(ToastLayout.MinWidth, placed[0].Width);
+        Assert.Equal(1500 - ToastLayout.MinWidth, placed[0].Left); // right edge stays at the pill's
+    }
+}

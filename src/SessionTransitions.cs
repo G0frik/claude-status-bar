@@ -75,11 +75,26 @@ public static class NotificationPolicy
         kind is SessionEventKind.PermissionResolved or SessionEventKind.Ended;
 }
 
-/// <summary>Where stacked notifications go: above the widget, newest nearest to it.</summary>
+/// <summary>
+/// Where stacked notifications go: above the pill, as wide as it and aligned with it (so they
+/// follow it as session dots and usage bars come and go), newest nearest to it.
+/// </summary>
 public static class ToastLayout
 {
     public const int MaxToasts = 3;
     public const double Gap = 6;
+
+    /// <summary>Narrowest a notification gets, e.g. before the pill has been measured.</summary>
+    public const double MinWidth = 220;
+
+    /// <summary>Bounds for <paramref name="count"/> notifications of equal height, newest first. All values in DIPs.</summary>
+    public static (double Left, double Top, double Width)[] Place(double pillLeft, double pillWidth, double pillTop, int count, double height)
+    {
+        double width = Math.Max(pillWidth, MinWidth);
+        double left = pillLeft + pillWidth - width; // right edges line up even when clamped
+        var tops = Tops(pillTop, Enumerable.Repeat(height, count).ToList());
+        return tops.Select(top => (left, top, width)).ToArray();
+    }
 
     /// <summary>
     /// Top edges for toasts of the given heights, ordered newest first, stacked upwards from
