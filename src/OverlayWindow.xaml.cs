@@ -143,8 +143,8 @@ public partial class OverlayWindow : Window
         Tick();
     }
 
-    // Keep the overlay out of Alt-Tab. With uiAccess=true in the manifest, a topmost window also
-    // sits above the Start menu and shell flyouts, so it stays visible at all times.
+    // Keep the overlay out of Alt-Tab. The app runs without uiAccess or elevation, so the Start
+    // menu and shell flyouts can cover it; AssertTopmost keeps it above ordinary windows.
     private void ApplyWindowStyles()
     {
         int ex = Native.GetWindowLong(_hwnd, Native.GWL_EXSTYLE) | Native.WS_EX_TOOLWINDOW;
