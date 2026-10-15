@@ -67,8 +67,9 @@ function run() {
   const id = safeId(p.session_id);
 
   if (event === "start") {
-    // When the app is not running, any leftover session files are stale; clear them first.
-    if (!running()) { try { for (const f of fs.readdirSync(sessDir)) fs.rmSync(path.join(sessDir, f), { force: true }); } catch {} }
+    // When the app is not running, other sessions' leftover files are stale; clear them first.
+    // This session's own file stays: on resume or compaction it holds the current status.
+    if (!running()) { try { for (const f of fs.readdirSync(sessDir)) if (f !== id) fs.rmSync(path.join(sessDir, f), { force: true }); } catch {} }
     // SessionStart also fires on resume and compaction; keep an existing entry's status.
     const sessPath = path.join(sessDir, id);
     let exists = false;
