@@ -36,7 +36,11 @@ public partial class App : Application
         base.OnStartup(e);
         _manager = new OverlayManager();
         _manager.Start();
+#if OFFLINE
+        _usage = new UsageUpdater();
+#else
         _usage = new UsageUpdater(new UsageFetcher());
+#endif
         _usage.Start();
     }
 

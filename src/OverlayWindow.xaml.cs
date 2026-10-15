@@ -92,6 +92,9 @@ public partial class OverlayWindow : Window
         _targetDevice = targetDevice ?? "";
         _isController = isController;
         InitializeComponent();
+#if !OFFLINE
+        AddOnlineUsageMenu();
+#endif
         UsageBars.ToolTip = TrackedToolTip(_usageTip);
         SessionDots.MouseEnter += (_, _) => Panel().PointerEntered();
         SessionDots.MouseLeave += (_, _) => { _panel?.PointerLeft(); HoverDot(null); };
@@ -682,10 +685,9 @@ public partial class OverlayWindow : Window
     {
         MiTimer.IsChecked = _settings.ShowTimer;
         MiUsage.IsChecked = _settings.ShowUsageBars;
-        MiUsageOnline.IsChecked = _settings.FetchUsageOnline;
-        MiUsageRefresh.IsEnabled = _settings.FetchUsageOnline;
-        foreach (var item in MiUsageRefresh.Items.OfType<MenuItem>())
-            item.IsChecked = item.Tag is string t && t == _settings.UsageRefreshMinutes.ToString();
+#if !OFFLINE
+        SyncOnlineUsageMenu();
+#endif
         MiSound.IsChecked = _settings.PlayCompletionSound;
         MiNotify.IsChecked = _settings.ShowNotifications;
         MiNotifyPermission.IsChecked = _settings.NotifyPermission;
@@ -694,7 +696,7 @@ public partial class OverlayWindow : Window
         MiStyleSpark.IsChecked = _settings.Style == AnimStyle.Spark;
         MiStyleCode.IsChecked = _settings.Style == AnimStyle.Code;
         MiStyleCrab.IsChecked = _settings.Style == AnimStyle.Crab;
-        MiVersion.Header = $"Version {AppVersion}";
+        MiVersion.Header = $"Version {AppVersion} · {BuildInfo.Variant}";
     }
 
     private static string AppVersion =>
@@ -714,6 +716,34 @@ public partial class OverlayWindow : Window
         OverlayManager.Instance?.SyncAll();
     }
 
+#if !OFFLINE
+    // ----- online build only: the usage API menu -----
+
+    private readonly MenuItem MiUsageOnline = new() { Header = "Fetch usage online", IsCheckable = true };
+    private readonly MenuItem MiUsageRefresh = new() { Header = "Refresh usage every" };
+
+    private void AddOnlineUsageMenu()
+    {
+        MiUsageOnline.Click += OnToggleUsageOnline;
+        foreach (int minutes in new[] { 2, 5, 10, 15 })
+        {
+            var item = new MenuItem { Header = $"{minutes} minutes", Tag = minutes.ToString(), IsCheckable = true };
+            item.Click += OnUsageRefresh;
+            MiUsageRefresh.Items.Add(item);
+        }
+        int at = Menu.Items.IndexOf(MiUsage) + 1;
+        Menu.Items.Insert(at, MiUsageOnline);
+        Menu.Items.Insert(at + 1, MiUsageRefresh);
+    }
+
+    private void SyncOnlineUsageMenu()
+    {
+        MiUsageOnline.IsChecked = _settings.FetchUsageOnline;
+        MiUsageRefresh.IsEnabled = _settings.FetchUsageOnline;
+        foreach (var item in MiUsageRefresh.Items.OfType<MenuItem>())
+            item.IsChecked = item.Tag is string t && t == _settings.UsageRefreshMinutes.ToString();
+    }
+
     private void OnToggleUsageOnline(object sender, RoutedEventArgs e)
     {
         _settings.FetchUsageOnline = !_settings.FetchUsageOnline;
@@ -730,6 +760,7 @@ public partial class OverlayWindow : Window
         UsageUpdater.Instance?.Refresh();
         OverlayManager.Instance?.SyncAll();
     }
+#endif
 
     private void OnToggleNotify(object sender, RoutedEventArgs e) =>
         ChangeNotifications(() => _settings.ShowNotifications = !_settings.ShowNotifications);

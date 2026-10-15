@@ -1,0 +1,30 @@
+<Project>
+
+  <!--
+    Build variant, shared by the app and the tests.
+      Offline=true (default): no network code is compiled in. UsageFetcher.cs is left out and the
+        OFFLINE symbol hides its settings and menu items; the app never reads ~/.claude/.credentials.json.
+      Offline=false: adds the opt-in usage fetch from Anthropic's usage endpoint.
+    Select with:  .\build.ps1 [-Online]   or   dotnet build -p:Offline=false
+  -->
+  <PropertyGroup>
+    <Offline Condition="'$(Offline)' == ''">true</Offline>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Offline)' == 'true'">
+    <DefineConstants>$(DefineConstants);OFFLINE</DefineConstants>
+    <!-- Shown in Explorer > Properties > Details, so the variant can be told from the file itself. -->
+    <Product>Claude Status Bar (offline build)</Product>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Offline)' != 'true'">
+    <Product>Claude Status Bar (online build)</Product>
+  </PropertyGroup>
+
+  <!-- A typo such as Offline=yes must not quietly produce the online build. -->
+  <Target Name="CheckOfflineProperty" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(Offline)' != 'true' and '$(Offline)' != 'false'"
+           Text="Offline must be 'true' or 'false' (got '$(Offline)')." />
+  </Target>
+
+</Project>

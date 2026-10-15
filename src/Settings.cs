@@ -16,11 +16,13 @@ public sealed class Settings
     public bool PlayCompletionSound { get; set; } = false;
     public bool ShowUsageBars { get; set; } = true;
 
+#if !OFFLINE
     /// <summary>Fetch usage from Anthropic's usage endpoint; when off, only local sources are used.</summary>
     public bool FetchUsageOnline { get; set; } = true;
 
     /// <summary>Minutes between online usage fetches while Claude Code is active.</summary>
     public int UsageRefreshMinutes { get; set; } = 5;
+#endif
 
     /// <summary>Show notifications at all; the two below choose which.</summary>
     public bool ShowNotifications { get; set; } = true;
