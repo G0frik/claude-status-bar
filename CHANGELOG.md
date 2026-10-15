@@ -8,6 +8,16 @@ All notable changes to this project are documented here. The format is based on
 
 ### Added
 
+- Offline build, the default: `.\build.ps1` (or `-p:Offline=true`) compiles in no network code
+  and never reads `~/.claude/.credentials.json`; `.\build.ps1 -Online` builds the variant with
+  the opt-in usage API. The menu's Version line and the exe's product name show the variant.
+- `BuildVariantTests`, `tools/verify-offline.ps1` and a hook test prove the offline build and
+  the hooks contain no network code; CI runs them for both variants.
+- `.github/SECURITY.md` rewritten for this fork, and `docs/SECURITY-OVERVIEW.md` for security
+  reviews.
+- CodeQL for C# and JavaScript, Dependabot for actions and NuGet, and release builds with
+  `SHA256SUMS.txt` and build provenance attestation.
+
 - Open a session from the widget: left-click a session's dot, a row of the new sessions panel, or
   the widget itself to bring that session's window to the front. The hooks now run in exec form
   and record each session's Claude Code process, from which the widget finds the window.
@@ -27,6 +37,17 @@ All notable changes to this project are documented here. The format is based on
 ### Changed
 
 - Right-click opens the menu; left-click now opens a session.
+- The usage API is off by default, under a new setting: earlier builds saved "Fetch usage
+  online" as on for everyone, so it has to be turned on again in the online build.
+- Releases publish the offline build only.
+
+### Security
+
+- The usage API request can only go to `https://api.anthropic.com/api/oauth/usage`: redirects
+  are refused, any other destination is rejected before sending, and responses are capped at
+  64 KB.
+- The sign-in token is read just before each request and set on that request only; it is never
+  logged, stored or written.
 
 ### Fixed
 

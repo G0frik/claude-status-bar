@@ -7,7 +7,7 @@ is thinking or running a tool, rotating activity words, a yellow dot when it is 
 permission, the elapsed time of the current turn, and two small bars for your plan usage limits. It docks into the empty space of the
 taskbar and resizes itself so it never overlaps the notification tray.
 
-<a href="https://github.com/BankkRoll/claude-status-bar/releases/latest"><img width="250" alt="Download for Windows" src="https://github.com/user-attachments/assets/69b3f2e8-5c20-4dfa-b7d7-2341639ab734"></a>
+<a href="https://github.com/G0frik/claude-status-bar/releases/latest"><img width="250" alt="Download for Windows" src="https://github.com/user-attachments/assets/69b3f2e8-5c20-4dfa-b7d7-2341639ab734"></a>
 
 ```
 …  ✦ Frolicking…  ▮▮ 0m 43s   |   ^  🖥 🔊  7:11 PM
@@ -16,6 +16,10 @@ taskbar and resizes itself so it never overlaps the notification tray.
 > Inspired by [m1ckc3s/claude-status-bar](https://github.com/m1ckc3s/claude-status-bar) (a macOS
 > menu-bar app). This is a full rewrite to native C and Windows — though the hook idea
 > and some pieces of the `state.json` contract were drawn from the original.
+>
+> This repository is a fork of [BankkRoll/claude-status-bar](https://github.com/BankkRoll/claude-status-bar)
+> that adds multi-session support, usage bars, notifications, and an offline build for managed
+> machines (see [Security](#security)).
 
 ## What it shows
 
@@ -51,20 +55,22 @@ Right-click the widget to open its menu:
 
 - **Show timer** — toggle the elapsed-time readout.
 - **Show usage limits** — toggle the usage bars.
-- **Fetch usage online** — on by default; turn off to keep the widget off the network (see
-  [How it works](#how-it-works)).
-- **Refresh usage every** — 2, 5 (default), 10, or 15 minutes between online fetches.
+- **Fetch usage online** and **Refresh usage every** — online build only (see
+  [How it works](#how-it-works)): turn on the usage API (off by default), and choose 2, 5
+  (default), 10, or 15 minutes between fetches.
 - **Play Completion Sound** — a chime when a turn finishes.
 - **Notifications** — turn notifications off, or choose which: when a session needs permission,
   when a turn finishes.
 - **Animation** — Claude Spark, Claude Code, or Crab Walking.
 - **Show on** — choose which monitors display the widget (defaults to the primary monitor).
+- **Version** — the version and build variant (`offline` or `online`).
 - **Quit** — close the widget; it returns on your next Claude Code session.
 
 ## Install
 
-1. Download the latest `ClaudeStatusBar-win-x64.zip` from
-   [Releases](https://github.com/BankkRoll/claude-status-bar/releases/latest) and extract it.
+1. Download the latest `ClaudeStatusBar-win-x64.zip` (the offline build) from
+   [Releases](https://github.com/G0frik/claude-status-bar/releases/latest) and extract it. To
+   check it first, see [Verify a release](docs/SECURITY-OVERVIEW.md#verify-a-release).
 2. Double-click **setup.bat**. A small window opens, registers the hooks for the current user,
    prints a confirmation, and waits for a key press.
 3. Start a new Claude Code session — the widget appears whenever Claude Code is running, and
@@ -93,21 +99,22 @@ Claude Code  ->  hooks       ->  ~/.claude/statusbar/sessions.d/<session>  ->  w
 usage API / cache / statusLine  ->  ~/.claude/statusbar/usage.json  ->  widget (usage bars)
 ```
 
-Plan usage comes from three sources that write the same file:
+Plan usage comes from these sources, which write the same file:
 
-- **The usage API.** The widget asks `api.anthropic.com` for your plan usage, using the sign-in
-  Claude Code keeps in `~/.claude/.credentials.json`. It only reads that file: the token is never
-  stored elsewhere, refreshed, or sent anywhere but Anthropic. This is what makes the bars work
-  from the VS Code extension, which never runs status line commands. The endpoint is the one
-  behind `/usage`; it is undocumented, so it could change, and it rate-limits frequent callers.
-  The widget therefore fetches once at startup, then every **Refresh usage every** minutes only
-  while Claude is working and for one interval after the turn ends, and not at all while idle.
-  After a rate-limit or error response it waits twice as long each time, up to 30 minutes.
-- **Claude Code's cache.** Claude Code keeps a copy of the same response in `~/.claude.json`,
-  and the widget uses it whenever it is newer than what it has, with no network. It only updates
-  when Claude Code fetches usage itself, so it can be hours old. Turn off **Fetch usage online**
-  to rely on it (and the status line) alone.
-- **The status line.** In the terminal, Claude Code passes plan usage to
+- **Claude Code's cache** (both builds). Claude Code keeps a copy of its usage response in
+  `~/.claude.json`, and the widget uses it whenever it is newer than what it has, with no
+  network. It only updates when Claude Code fetches usage itself, so it can be hours old.
+- **The usage API** (online build only, off until you turn on **Fetch usage online**). The
+  widget asks `api.anthropic.com` for your plan usage, using the sign-in Claude Code keeps in
+  `~/.claude/.credentials.json`. It only reads that file: the token is never stored, logged,
+  refreshed, or sent anywhere but that one endpoint (redirects are refused). This is what keeps
+  the bars current from the VS Code extension, which never runs status line commands. The
+  endpoint is the one behind `/usage`; it is undocumented, so it could change, and it
+  rate-limits frequent callers. The widget therefore fetches once at startup, then every
+  **Refresh usage every** minutes only while Claude is working and for one interval after the
+  turn ends, and not at all while idle. After a rate-limit or error response it waits twice as
+  long each time, up to 30 minutes.
+- **The status line** (both builds). In the terminal, Claude Code passes plan usage to
   [status line](https://code.claude.com/docs/en/statusline) commands, so setup also registers
   `statusline.js` as your `statusLine`. It prints nothing. If you already had a status line, it is
   saved to `~/.claude/statusbar/statusline-chain.json` and chained after ours, so your own status
@@ -128,7 +135,13 @@ Requires the [.NET 9 SDK](https://dotnet.microsoft.com/download/dotnet/9.0).
 ```powershell
 .\build.ps1 -SelfContained -Zip   # -> dist\ClaudeStatusBar-win-x64.zip
 .\build.ps1 -Install              # build and register the hooks in one step
+.\build.ps1 -Online               # the online variant (adds the opt-in usage API)
 ```
+
+There are two build variants. The **offline** build (the default, and the one released)
+compiles in no network code at all and never reads `~/.claude/.credentials.json`. The **online**
+build (`-Online`, or `-p:Offline=false` for `dotnet build`) adds the opt-in usage API described
+above. See [Security](#security).
 
 The hook registration done by `setup.bat` runs `hooks\install.js`, which merges the hooks into
 `~/.claude/settings.json` (backing it up once to `settings.json.bak-statusbar` and leaving other
@@ -139,9 +152,13 @@ again after updating, so the installed hook scripts match the widget.
 ### Tests
 
 ```powershell
-dotnet test tests/ClaudeStatusBar.Tests                 # app: sessions, focus, stores, file sharing
+dotnet test tests/ClaudeStatusBar.Tests                    # app, offline build
+dotnet test tests/ClaudeStatusBar.Tests -p:Offline=false   # app, online build
 node --test (Get-ChildItem hooks/test/*.test.js).FullName  # hooks: per-session status, install, ...
 ```
+
+`BuildVariantTests` checks that the offline build references no network code, and
+`.\tools\verify-offline.ps1 dist\ClaudeStatusBar.exe` checks a published exe.
 
 Two tools help check the widget itself while it runs:
 
@@ -153,15 +170,16 @@ Two tools help check the widget itself while it runs:
 
 ## Uninstall
 
-Run `uninstall.bat`, or:
+Run `uninstall.bat` from the extracted folder, or:
 
 ```powershell
-node "%USERPROFILE%\.claude\statusbar\uninstall.js"
+node "<extracted folder>\hooks\uninstall.js"
 ```
 
 Removes the status-bar hooks and stops the running widget, leaving other hooks intact, and
-restores the status line you had before installing (if any). Then delete
-the application folder.
+restores the status line you had before installing (if any). Then delete the application
+folder. To remove everything, also delete `%USERPROFILE%\.claude\statusbar` and
+`%USERPROFILE%\.claude\settings.json.bak-statusbar`.
 
 ## Debugging
 
@@ -172,6 +190,14 @@ The widget always records where the usage bars' numbers come from in `usage.log`
 `ClaudeStatusBar.exe`: usage API results (only when they change) and each update it displays,
 tagged with its source (`api`, `cache` or `statusline`).
 
+## Security
+
+- [SECURITY.md](.github/SECURITY.md): how to report a vulnerability, and the scope of each build
+  variant.
+- [docs/SECURITY-OVERVIEW.md](docs/SECURITY-OVERVIEW.md): every file read and written, process
+  started, Windows API with a security angle and network destination, and how to verify a
+  release (checksums, build provenance, `tools/verify-offline.ps1`).
+
 ## Trademark
 
 Unofficial and not affiliated with, endorsed by, or sponsored by Anthropic. "Claude" and the
@@ -180,7 +206,7 @@ only.
 
 Please don't contact Anthropic about this project. To report a bug, request a feature, or raise any
 other issue, open an issue at
-[github.com/BankkRoll/claude-status-bar/issues](https://github.com/BankkRoll/claude-status-bar/issues).
+[github.com/G0frik/claude-status-bar/issues](https://github.com/G0frik/claude-status-bar/issues).
 
 ## License
 
