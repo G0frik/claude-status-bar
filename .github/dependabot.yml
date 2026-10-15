@@ -1,0 +1,25 @@
+# Dependency updates. Releases wait out a cooldown before being proposed, so a compromised or
+# broken release has time to be caught upstream first. Actions stay pinned to commit SHAs;
+# Dependabot updates the SHA and its version comment together.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      actions:
+        patterns: ["*"]
+
+  # Test-only packages (xunit, the test SDK); the app itself has no package references.
+  - package-ecosystem: nuget
+    directory: /tests/ClaudeStatusBar.Tests
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    groups:
+      test-packages:
+        patterns: ["*"]
