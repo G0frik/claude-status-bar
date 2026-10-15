@@ -20,4 +20,9 @@
     <ProjectReference Include="..\..\src\ClaudeStatusBar.csproj" />
   </ItemGroup>
 
+  <!-- Tests of the usage API fetch, which only the online build has (see Directory.Build.props). -->
+  <ItemGroup Condition="'$(Offline)' == 'true'">
+    <Compile Remove="UsageFetcherTests.cs" />
+  </ItemGroup>
+
 </Project>

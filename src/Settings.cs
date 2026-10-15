@@ -17,8 +17,12 @@ public sealed class Settings
     public bool ShowUsageBars { get; set; } = true;
 
 #if !OFFLINE
-    /// <summary>Fetch usage from Anthropic's usage endpoint; when off, only local sources are used.</summary>
-    public bool FetchUsageOnline { get; set; } = true;
+    /// <summary>
+    /// Fetch usage from Anthropic's usage endpoint; off by default, so the credentials file is
+    /// never read unless the user turns this on. It replaces FetchUsageOnline, which earlier
+    /// builds saved as true for everyone without asking; that key is ignored.
+    /// </summary>
+    public bool UsageApiOptIn { get; set; }
 
     /// <summary>Minutes between online usage fetches while Claude Code is active.</summary>
     public int UsageRefreshMinutes { get; set; } = 5;
@@ -49,12 +53,15 @@ public sealed class Settings
     {
         try
         {
-            if (File.Exists(Path))
-                return JsonSerializer.Deserialize<Settings>(File.ReadAllText(Path), Options) ?? new Settings();
+            if (File.Exists(Path)) return Parse(File.ReadAllText(Path));
         }
         catch { }
         return new Settings();
     }
+
+    /// <summary>Settings from saved JSON; unknown keys (such as the retired FetchUsageOnline) are ignored.</summary>
+    internal static Settings Parse(string json) =>
+        JsonSerializer.Deserialize<Settings>(json, Options) ?? new Settings();
 
     public void Save()
     {

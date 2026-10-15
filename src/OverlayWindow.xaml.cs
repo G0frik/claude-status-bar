@@ -738,15 +738,15 @@ public partial class OverlayWindow : Window
 
     private void SyncOnlineUsageMenu()
     {
-        MiUsageOnline.IsChecked = _settings.FetchUsageOnline;
-        MiUsageRefresh.IsEnabled = _settings.FetchUsageOnline;
+        MiUsageOnline.IsChecked = _settings.UsageApiOptIn;
+        MiUsageRefresh.IsEnabled = _settings.UsageApiOptIn;
         foreach (var item in MiUsageRefresh.Items.OfType<MenuItem>())
             item.IsChecked = item.Tag is string t && t == _settings.UsageRefreshMinutes.ToString();
     }
 
     private void OnToggleUsageOnline(object sender, RoutedEventArgs e)
     {
-        _settings.FetchUsageOnline = !_settings.FetchUsageOnline;
+        _settings.UsageApiOptIn = !_settings.UsageApiOptIn;
         _settings.Save();
         UsageUpdater.Instance?.Refresh(); // switch sources now rather than at the next poll
         OverlayManager.Instance?.SyncAll();

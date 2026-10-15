@@ -6,48 +6,75 @@ using System.Text.Json;
 namespace ClaudeStatusBar;
 
 /// <summary>
-/// Online usage source (when <see cref="Settings.FetchUsageOnline"/> is on): Anthropic's OAuth
-/// usage endpoint (the one behind Claude Code's /usage), using the access token Claude Code keeps
-/// in ~/.claude/.credentials.json, read-only. It never refreshes the token (that would rotate
-/// Claude Code's own login). The endpoint rate-limits frequent callers, so it is polled sparingly:
-/// every <see cref="Settings.UsageRefreshMinutes"/> while Claude Code is active and for one
-/// interval after (to catch a turn's final numbers), not at all while idle, with exponential
-/// backoff after a rate-limit or error response. The endpoint is undocumented, so any unexpected
-/// response leaves the previous values in place.
+/// Online usage source, compiled into the online build only and used only when the user opts in
+/// (<see cref="Settings.UsageApiOptIn"/>): Anthropic's OAuth usage endpoint (the one behind Claude
+/// Code's /usage), using the access token Claude Code keeps in ~/.claude/.credentials.json,
+/// read-only. It never refreshes the token (that would rotate Claude Code's own login).
+///
+/// The endpoint rate-limits frequent callers, so it is polled sparingly: every
+/// <see cref="Settings.UsageRefreshMinutes"/> while Claude Code is active and for one interval
+/// after (to catch a turn's final numbers), not at all while idle, with exponential backoff after
+/// a rate-limit or error response. The endpoint is undocumented, so any unexpected response leaves
+/// the previous values in place.
+///
+/// Requests can only go to <see cref="Endpoint"/>: redirects are not followed and
+/// <see cref="PinnedHostHandler"/> refuses any other URI. The token is read just before each
+/// request, set on that request only, and never stored, logged or written anywhere.
 /// </summary>
 public sealed class UsageFetcher : IUsageSource, IDisposable
 {
-    private const string Endpoint = "https://api.anthropic.com/api/oauth/usage";
+    public static readonly Uri Endpoint = new("https://api.anthropic.com/api/oauth/usage");
 
+    private const int MaxResponseBytes = 64 * 1024; // the real response is about 2 KB
     private static readonly TimeSpan MaxBackoff = TimeSpan.FromMinutes(30);
 
-    private static readonly string CredentialsPath = Path.Combine(
+    private static readonly string DefaultCredentialsPath = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", ".credentials.json");
 
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(15) };
-    private readonly StateStore _state = new();
+    private readonly HttpClient _http;
+    private readonly string _credentialsPath;
+    private readonly StateStore _state;
+    private readonly Settings _settings;
 
     private DateTime _nextFetch = DateTime.MinValue; // UTC; MinValue fetches on the next tick
     private bool _fetchedOnce;
     private int _failures;                            // consecutive failed fetches, for backoff
 
-    public UsageFetcher()
+    public UsageFetcher() : this(CreateHandler(), DefaultCredentialsPath, new StateStore(), Settings.Shared) { }
+
+    /// <param name="handler">Transport; tests pass a fake. Wrapped in <see cref="PinnedHostHandler"/>.</param>
+    internal UsageFetcher(HttpMessageHandler handler, string credentialsPath, StateStore state, Settings settings)
     {
+        _credentialsPath = credentialsPath;
+        _state = state;
+        _settings = settings;
+        _http = new HttpClient(new PinnedHostHandler(handler))
+        {
+            Timeout = TimeSpan.FromSeconds(15),
+            MaxResponseContentBufferSize = MaxResponseBytes,
+        };
         _http.DefaultRequestHeaders.Add("anthropic-beta", "oauth-2025-04-20");
         _http.DefaultRequestHeaders.UserAgent.ParseAdd($"ClaudeStatusBar/{AppVersion}");
     }
+
+    /// <summary>No redirects (a redirect could only lead somewhere other than the endpoint) and no cookies; the system proxy is kept.</summary>
+    internal static SocketsHttpHandler CreateHandler() => new()
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+    };
 
     public void Refresh() => _nextFetch = DateTime.MinValue;
 
     public void Dispose() => _http.Dispose();
 
-    private static TimeSpan Interval => TimeSpan.FromMinutes(Math.Clamp(Settings.Shared.UsageRefreshMinutes, 1, 60));
+    private TimeSpan Interval => TimeSpan.FromMinutes(Math.Clamp(_settings.UsageRefreshMinutes, 1, 60));
 
     public async Task TickAsync(UsageFile output, CancellationToken ct)
     {
-        if (!Settings.Shared.FetchUsageOnline)
+        if (!_settings.UsageApiOptIn)
         {
-            output.Status("cache", "online fetching off; using Claude Code's cached usage in ~/.claude.json and the terminal statusLine");
+            output.Status("cache", "usage API off; using Claude Code's cached usage in ~/.claude.json and the terminal statusLine");
             return;
         }
         if (DateTime.UtcNow < _nextFetch) return;
@@ -85,11 +112,15 @@ public sealed class UsageFetcher : IUsageSource, IDisposable
 
         using var request = new HttpRequestMessage(HttpMethod.Get, Endpoint);
         request.Headers.Authorization = new("Bearer", token);
+        token = null; // locals of an async method live in its state machine, past the await
         using var response = await _http.SendAsync(request, ct);
 
         if (!response.IsSuccessStatusCode)
         {
-            var reason = response.StatusCode == HttpStatusCode.TooManyRequests ? "rate limited (429)" : $"HTTP {(int)response.StatusCode}";
+            int code = (int)response.StatusCode;
+            var reason = response.StatusCode == HttpStatusCode.TooManyRequests ? "rate limited (429)"
+                : code is >= 300 and < 400 ? $"redirect refused ({code})"
+                : $"HTTP {code}";
             Backoff(output, reason, response.Headers.RetryAfter?.Delta);
             return;
         }
@@ -117,11 +148,12 @@ public sealed class UsageFetcher : IUsageSource, IDisposable
         output.Status("api", $"{reason}, next try in {wait.TotalMinutes:0} min");
     }
 
-    private static string? ReadAccessToken()
+    // Only claudeAiOauth.accessToken and expiresAt are read; the document is released right away.
+    private string? ReadAccessToken()
     {
         try
         {
-            using var doc = JsonDocument.Parse(SharedFile.ReadAllText(CredentialsPath));
+            using var doc = JsonDocument.Parse(SharedFile.ReadAllText(_credentialsPath));
             if (!doc.RootElement.TryGetProperty("claudeAiOauth", out var oauth)) return null;
             if (!oauth.TryGetProperty("accessToken", out var t) || t.ValueKind != JsonValueKind.String) return null;
             if (oauth.TryGetProperty("expiresAt", out var exp) && exp.ValueKind == JsonValueKind.Number &&
@@ -134,4 +166,21 @@ public sealed class UsageFetcher : IUsageSource, IDisposable
 
     private static string AppVersion =>
         System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.2.0";
+}
+
+/// <summary>
+/// Refuses any request whose URI isn't exactly <see cref="UsageFetcher.Endpoint"/>, so a later code
+/// change can't send the sign-in token anywhere else.
+/// </summary>
+internal sealed class PinnedHostHandler(HttpMessageHandler inner) : DelegatingHandler(inner)
+{
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken ct)
+    {
+        var uri = request.RequestUri;
+        bool allowed = uri is { IsAbsoluteUri: true }
+            && uri.Port == 443
+            && Uri.Compare(uri, UsageFetcher.Endpoint, UriComponents.AbsoluteUri, UriFormat.UriEscaped, StringComparison.Ordinal) == 0;
+        if (!allowed) throw new InvalidOperationException($"Refused a request to {uri}: only {UsageFetcher.Endpoint} is allowed.");
+        return base.SendAsync(request, ct);
+    }
 }
