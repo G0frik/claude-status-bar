@@ -16,7 +16,7 @@ public sealed record UsageLimits(UsageWindow? FiveHour, UsageWindow? SevenDay, s
 }
 
 /// <summary>
-/// Reads the usage file written by the statusLine script or <see cref="UsageFetcher"/>, re-parsing only when it changes on
+/// Reads the usage file written by the statusLine script or <see cref="UsageUpdater"/>, re-parsing only when it changes on
 /// disk. A window whose reset time has passed is reported as empty, since Claude Code stops
 /// sending a window once it resets.
 /// </summary>

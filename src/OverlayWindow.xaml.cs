@@ -718,7 +718,7 @@ public partial class OverlayWindow : Window
     {
         _settings.FetchUsageOnline = !_settings.FetchUsageOnline;
         _settings.Save();
-        UsageFetcher.Instance?.Refresh(); // switch sources now rather than at the next poll
+        UsageUpdater.Instance?.Refresh(); // switch sources now rather than at the next poll
         OverlayManager.Instance?.SyncAll();
     }
 
@@ -727,7 +727,7 @@ public partial class OverlayWindow : Window
         if (sender is not MenuItem { Tag: string tag } || !int.TryParse(tag, out int minutes)) return;
         _settings.UsageRefreshMinutes = minutes;
         _settings.Save();
-        UsageFetcher.Instance?.Refresh();
+        UsageUpdater.Instance?.Refresh();
         OverlayManager.Instance?.SyncAll();
     }
 

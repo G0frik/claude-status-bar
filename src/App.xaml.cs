@@ -7,7 +7,7 @@ public partial class App : Application
 {
     private Mutex? _instanceLock;
     private OverlayManager? _manager;
-    private UsageFetcher? _usage;
+    private UsageUpdater? _usage;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -36,7 +36,7 @@ public partial class App : Application
         base.OnStartup(e);
         _manager = new OverlayManager();
         _manager.Start();
-        _usage = new UsageFetcher();
+        _usage = new UsageUpdater(new UsageFetcher());
         _usage.Start();
     }
 
