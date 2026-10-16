@@ -12,7 +12,8 @@
   which includes the networking libraries whether the app uses them or not. That the app's own
   assembly references no System.Net code is checked by tests/ClaudeStatusBar.Tests
   (BuildVariantTests), which inspect its metadata.
-  Prints the SHA-256 to compare with the release's SHA256SUMS.txt. Exits 0 on PASS, 1 on FAIL.
+  Prints the file's SHA-256 for your records; a release's SHA256SUMS.txt lists the zip, so check
+  the zip against that. Exits 0 on PASS, 1 on FAIL.
 
 .EXAMPLE
   .\tools\verify-offline.ps1 dist\ClaudeStatusBar.exe
