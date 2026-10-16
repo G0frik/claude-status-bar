@@ -15,6 +15,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const cp = require("child_process");
+const crypto = require("crypto");
 
 const args = Object.fromEntries(process.argv.slice(2).reduce((acc, a, i, all) =>
   (a.startsWith("--") ? [...acc, [a.slice(2), all[i + 1]]] : acc), []));
@@ -77,7 +78,7 @@ const TOOLS = ["Read", "Edit", "Bash", "Grep", "WebFetch", "Write"];
 
 async function runSession(index, startDelay, lifetimeMs) {
   await sleep(startDelay);
-  const id = `sim-${index}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `sim-${index}-${crypto.randomBytes(3).toString("hex")}`;
   ownIds.add(id);
   const base = { session_id: id, cwd: path.join("C:\\sim", PROJECTS[index % PROJECTS.length]), transcript_path: "" };
   await hook("lifecycle.js", "start", base);
