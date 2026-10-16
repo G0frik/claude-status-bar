@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-17
+
 ### Added
 
 - Offline build, the default: `.\build.ps1` (or `-p:Offline=true`) compiles in no network code
@@ -66,6 +68,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [0.2.0] - 2026-10-13
 
+Not published as a GitHub release; the version is in the source history only.
+
 ### Added
 
 - Usage-limit bars: two thin vertical bars at the right edge of the widget showing the 5-hour
@@ -101,5 +105,7 @@ Initial release. A Windows port of the macOS
 - One-click `setup.bat` / `uninstall.bat`, plus `build.ps1` for building and packaging.
 - Self-contained release build that bundles the .NET runtime.
 
-[0.2.0]: https://github.com/G0frik/claude-status-bar/releases/tag/v0.2.0
+[Unreleased]: https://github.com/G0frik/claude-status-bar/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/G0frik/claude-status-bar/releases/tag/v0.3.0
+[0.2.0]: https://github.com/G0frik/claude-status-bar/tree/0de4b0a
 [0.1.0]: https://github.com/BankkRoll/claude-status-bar/releases/tag/v0.1.0
