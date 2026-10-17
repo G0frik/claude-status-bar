@@ -6,6 +6,21 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- Opening a session that runs in an editor's Claude Code panel now also switches that window to
+  the session's own chat tab, in any VS Code-based editor, through the extension's
+  `/open?session=<id>` link. Terminal sessions still get only their window brought forward.
+  The menu item "Switch to the session's chat tab" turns it off, and `open.log` records each
+  attempt.
+- A weekly workflow (`extension-contract.yml`) checks that the current Marketplace build of the
+  Claude Code extension still has that link.
+
+### Changed
+
+- `lifecycle.js` starts the widget without the session's `ELECTRON_*`, `VSCODE_*` and
+  `CLAUDE_CODE_*` environment variables (new `widgetenv.js`, installed with the other hooks).
+
 ## [0.3.0] - 2026-10-17
 
 ### Added

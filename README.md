@@ -39,8 +39,9 @@ taskbar and resizes itself so it never overlaps the notification tray.
   under the mouse is highlighted.
 - **Open a session** — left-click a dot or a panel row to bring that session's window (VS Code,
   Antigravity, Windows Terminal, console) to the front; left-click anywhere else on the widget
-  opens the session the label shows. The window comes forward, but not the specific chat or
-  terminal tab inside it.
+  opens the session the label shows. For a session in the Claude Code panel of a VS Code-based
+  editor (VS Code, Cursor, Antigravity, …), the widget also switches that window to the
+  session's own chat tab. See [Switching to the chat tab](#switching-to-the-chat-tab).
 - **Notifications** — a small popup above the widget when a session needs permission (it stays
   until the session moves on) or finishes a turn of 20 seconds or more. It never takes focus, is
   skipped for the session whose window is already in front and while a fullscreen app,
@@ -48,6 +49,28 @@ taskbar and resizes itself so it never overlaps the notification tray.
 
 The widget tracks the taskbar height and DPI, and anchors itself just before the tray, reflowing
 when tray icons appear or disappear.
+
+### Switching to the chat tab
+
+When several Claude Code sessions share one editor window, clicking a session brings the window
+forward and then shows that session's tab. The widget does this through the Claude Code
+extension's own link, `<editor>://anthropic.claude-code/open?session=<id>`, handed to the editor
+that runs the session.
+
+- **The first time** in each editor, the editor asks *"Allow 'Claude Code for VS Code' extension
+  to open this URI?"*. Tick **Don't ask again for this extension** and choose **Open**.
+- **It takes about a second.** Each switch starts the editor's exe briefly to pass the link to the
+  running window, so the tab changes a moment after the window comes forward.
+- **Only Claude Code panel sessions.** A session started with `claude` in a terminal (the
+  editor's terminal, Windows Terminal, a console) gets its window brought forward, but not its
+  terminal tab. Sending the link would open a second copy of the session in a panel. Sessions in
+  remote windows (WSL, SSH, containers) don't show in the widget at all, because their hooks run
+  on the remote machine.
+- **Only when the window really came forward.** The editor delivers the link to its last
+  focused window. If Windows refused to bring the session's window forward, the widget doesn't
+  send the link, so it never opens the session in another window.
+- Turn it off with **Switch to the session's chat tab** in the menu. Each click is logged in
+  `open.log` (see [Debugging](#debugging)).
 
 ## Menu
 
@@ -59,6 +82,8 @@ Right-click the widget to open its menu:
   [How it works](#how-it-works)): turn on the usage API (off by default), and choose 2, 5
   (default), 10, or 15 minutes between fetches.
 - **Play Completion Sound** — a chime when a turn finishes.
+- **Switch to the session's chat tab** — when opening a session in an editor's Claude Code panel,
+  also show its tab (on by default; see [Switching to the chat tab](#switching-to-the-chat-tab)).
 - **Notifications** — turn notifications off, or choose which: when a session needs permission,
   when a turn finishes.
 - **Animation** — Claude Spark, Claude Code, or Crab Walking.
@@ -189,6 +214,18 @@ Set `CLAUDE_STATUSBAR_DEBUG=1` before starting a session to append hook activity
 The widget always records where the usage bars' numbers come from in `usage.log`, next to
 `ClaudeStatusBar.exe`: usage API results (only when they change) and each update it displays,
 tagged with its source (`api`, `cache` or `statusline`).
+
+`open.log`, in the same folder, has one line per click that tried to switch to a session's chat
+tab. A line shows either `launched <scheme> <extension version>`, or the reason it was skipped:
+
+| Reason | Meaning |
+|---|---|
+| `not-panel` | The session runs in a terminal. |
+| `not-in-front` | Windows refused to bring the window forward (`refused`), or another window was still in front 500 ms later. |
+| `no-open-route` | The installed Claude Code extension has no `/open` link. |
+| `no-protocol` | The editor's `product.json` names no URL scheme. |
+| `bad-id`, `no-chain`, `no-process` | The session's id or processes couldn't be read. |
+| `repeat` | A second click within 2 s. |
 
 ## Security
 
