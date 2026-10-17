@@ -702,7 +702,7 @@ public partial class OverlayWindow : Window
     }
 
     private static string AppVersion =>
-        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.3.0";
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.4.0";
 
     private void OnToggleTimer(object sender, RoutedEventArgs e)
     {

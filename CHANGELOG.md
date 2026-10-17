@@ -6,6 +6,8 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-17
+
 ### Added
 
 - Opening a session that runs in an editor's Claude Code panel now also switches that window to
@@ -120,7 +122,8 @@ Initial release. A Windows port of the macOS
 - One-click `setup.bat` / `uninstall.bat`, plus `build.ps1` for building and packaging.
 - Self-contained release build that bundles the .NET runtime.
 
-[Unreleased]: https://github.com/G0frik/claude-status-bar/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/G0frik/claude-status-bar/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/G0frik/claude-status-bar/releases/tag/v0.4.0
 [0.3.0]: https://github.com/G0frik/claude-status-bar/releases/tag/v0.3.0
 [0.2.0]: https://github.com/G0frik/claude-status-bar/tree/0de4b0a
 [0.1.0]: https://github.com/BankkRoll/claude-status-bar/releases/tag/v0.1.0
