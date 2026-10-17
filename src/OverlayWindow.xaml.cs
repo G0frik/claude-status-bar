@@ -659,9 +659,10 @@ public partial class OverlayWindow : Window
 
     private void OpenSession(ClaudeState session)
     {
-        var hwnd = SessionWindowFinder.Find(session);
-        if (hwnd == IntPtr.Zero) ShowNotice("Can't find its window");
-        else SessionWindowFinder.Activate(hwnd);
+        var (hwnd, chain) = SessionWindowFinder.Locate(session);
+        if (hwnd == IntPtr.Zero) { ShowNotice("Can't find its window"); return; }
+        bool activated = SessionWindowFinder.Activate(hwnd);
+        if (_settings.OpenChatTab) ChatTabOpener.Open(session, chain, activated);
     }
 
     private void ShowNotice(string text)
@@ -689,6 +690,7 @@ public partial class OverlayWindow : Window
         SyncOnlineUsageMenu();
 #endif
         MiSound.IsChecked = _settings.PlayCompletionSound;
+        MiChatTab.IsChecked = _settings.OpenChatTab;
         MiNotify.IsChecked = _settings.ShowNotifications;
         MiNotifyPermission.IsChecked = _settings.NotifyPermission;
         MiNotifyFinished.IsChecked = _settings.NotifyFinished;
@@ -761,6 +763,13 @@ public partial class OverlayWindow : Window
         OverlayManager.Instance?.SyncAll();
     }
 #endif
+
+    private void OnToggleChatTab(object sender, RoutedEventArgs e)
+    {
+        _settings.OpenChatTab = !_settings.OpenChatTab;
+        _settings.Save();
+        OverlayManager.Instance?.SyncAll();
+    }
 
     private void OnToggleNotify(object sender, RoutedEventArgs e) =>
         ChangeNotifications(() => _settings.ShowNotifications = !_settings.ShowNotifications);

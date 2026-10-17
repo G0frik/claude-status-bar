@@ -134,6 +134,31 @@ internal static class Native
     [DllImport("kernel32.dll", SetLastError = true)]
     public static extern bool CloseHandle(IntPtr handle);
 
+    // ----- process image paths (which editor install and which extension a session runs in) -----
+
+    public const uint PROCESS_QUERY_LIMITED_INFORMATION = 0x1000;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    public static extern IntPtr OpenProcess(uint access, bool inheritHandle, uint processId);
+
+    [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    public static extern bool QueryFullProcessImageNameW(IntPtr process, uint flags, System.Text.StringBuilder exeName, ref uint size);
+
+    /// <summary>Full path of a process's exe, or null if the process is gone or can't be queried.</summary>
+    public static string? ImagePath(int pid)
+    {
+        if (pid <= 0) return null;
+        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+        if (process == IntPtr.Zero) return null;
+        try
+        {
+            var path = new System.Text.StringBuilder(1024);
+            uint size = (uint)path.Capacity;
+            return QueryFullProcessImageNameW(process, 0, path, ref size) ? path.ToString(0, (int)size) : null;
+        }
+        finally { CloseHandle(process); }
+    }
+
     // ----- top-level windows -----
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);

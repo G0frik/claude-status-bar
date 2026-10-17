@@ -6,7 +6,9 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Planned
 
-Nothing in progress; pick from the ideas below.
+- **Open the session's chat tab** (S): when several sessions share one editor window, a click
+  switches to that session's tab, through the Claude Code extension's `/open` URI. Works in any
+  VS Code-based editor. Design: [docs/plans/session-chat-tab.md](docs/plans/session-chat-tab.md)
 
 ## Ideas
 

@@ -29,6 +29,8 @@
                 <!-- The online build inserts "Fetch usage online" and "Refresh usage every" here (OverlayWindow.AddOnlineUsageMenu). -->
                 <MenuItem x:Name="MiSound" Header="Play Completion Sound"
                           IsCheckable="True" Click="OnToggleSound"/>
+                <MenuItem x:Name="MiChatTab" Header="Switch to the session's chat tab"
+                          IsCheckable="True" Click="OnToggleChatTab"/>
                 <MenuItem Header="Notifications">
                     <MenuItem x:Name="MiNotify" Header="Show notifications" IsCheckable="True" Click="OnToggleNotify"/>
                     <Separator/>

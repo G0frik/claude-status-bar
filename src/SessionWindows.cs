@@ -8,6 +8,9 @@ public sealed record ProcessInfo(int Pid, int ParentPid, string ExeName);
 /// <summary>A visible, unowned, titled top-level window. Lower ZOrder is closer to the top.</summary>
 public sealed record WindowInfo(IntPtr Handle, int Pid, string Title, int ZOrder);
 
+/// <summary>A session's process, its parent, and the window the walk up from it reached.</summary>
+public sealed record SessionChain(int SessionPid, int ParentPid, WindowInfo Window);
+
 public interface IProcessTable
 {
     ProcessInfo? Get(int pid);
@@ -49,18 +52,26 @@ public static class SessionWindows
             || name.Equals("node", StringComparison.OrdinalIgnoreCase);
     }
 
-    public static WindowInfo? Resolve(int pid, string project, IProcessTable processes, IWindowTable windows)
+    public static WindowInfo? Resolve(int pid, string project, IProcessTable processes, IWindowTable windows) =>
+        ResolveChain(pid, project, processes, windows)?.Window;
+
+    /// <summary>
+    /// Like <see cref="Resolve"/>, and also says which processes the walk went through: the
+    /// session's own process and its parent tell an extension panel session from a terminal one.
+    /// </summary>
+    public static SessionChain? ResolveChain(int pid, string project, IProcessTable processes, IWindowTable windows)
     {
         if (pid <= 0) return null;
         var process = processes.Get(pid);
         if (process is null || !IsSessionProcess(process.ExeName)) return null;
+        int parentPid = process.ParentPid;
 
         var seen = new HashSet<int>();
         for (int depth = 0; process is not null && depth < MaxDepth && seen.Add(process.Pid); depth++)
         {
             if (StopAt.Contains(process.ExeName)) return null;
             var owned = windows.ForProcess(process.Pid);
-            if (owned.Count > 0) return Choose(owned, project);
+            if (owned.Count > 0) return new SessionChain(pid, parentPid, Choose(owned, project));
             if (process.ParentPid <= 0) return null;
             process = processes.Get(process.ParentPid);
         }
@@ -86,10 +97,13 @@ public static class SessionWindows
 /// </summary>
 public static class SessionWindowFinder
 {
-    public static IntPtr Find(ClaudeState session)
+    public static IntPtr Find(ClaudeState session) => Locate(session).Handle;
+
+    /// <summary>The session's window, plus the process chain when the window is an ancestor's (null for a classic console).</summary>
+    public static (IntPtr Handle, SessionChain? Chain) Locate(ClaudeState session)
     {
-        var window = SessionWindows.Resolve(session.Pid, session.Project, ToolhelpProcessTable.Take(), TopLevelWindows.Take());
-        return window?.Handle ?? ConsoleWindowOf(session.Pid);
+        var chain = SessionWindows.ResolveChain(session.Pid, session.Project, ToolhelpProcessTable.Take(), TopLevelWindows.Take());
+        return chain is not null ? (chain.Window.Handle, chain) : (ConsoleWindowOf(session.Pid), null);
     }
 
     /// <summary>Bring the window to the front (restoring it if minimized); flash it if Windows refuses.</summary>

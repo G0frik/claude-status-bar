@@ -1,0 +1,52 @@
+name: Extension contract
+
+# Opening a session's chat tab relies on the Claude Code extension's URI route
+# (<scheme>://anthropic.claude-code/open?session=<id> → claude-vscode.primaryEditor.open).
+# This checks that the current Marketplace build still has it, so a change upstream shows up
+# here instead of as clicks that quietly stop switching tabs. See docs/plans/session-chat-tab.md.
+
+on:
+  schedule:
+    - cron: "17 6 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  open-route:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-dotnet@9a946fdbd5fb07b82b2f5a4466058b876ab72bb2 # v5.3.0
+        with:
+          dotnet-version: "9.0.x"
+
+      # The gallery has no "latest" download URL: ask for the newest win32-x64 version first.
+      - name: Download the current extension
+        shell: pwsh
+        run: |
+          $ProgressPreference = "SilentlyContinue"
+          $query =@{ filters = @(@{ criteria = @(@{ filterType = 7; value = "anthropic.claude-code" }) }); flags = 16 } | ConvertTo-Json -Depth 5
+          $result = Invoke-RestMethod -Method Post -Uri "https://marketplace.visualstudio.com/_apis/public/gallery/extensionquery" `
+            -ContentType "application/json" -Headers @{ Accept = "application/json;api-version=7.2-preview.1" } -Body $query
+          $version = ($result.results[0].extensions[0].versions | Where-Object targetPlatform -eq "win32-x64" | Select-Object -First 1).version
+          if (-not $version) { throw "No win32-x64 version of anthropic.claude-code in the Marketplace" }
+          Write-Host "anthropic.claude-code $version"
+          $vsix = Join-Path $env:RUNNER_TEMP "claude-code.vsix"
+          Invoke-WebRequest "https://marketplace.visualstudio.com/_apis/public/gallery/publishers/anthropic/vsextensions/claude-code/$version/vspackage?targetPlatform=win32-x64" -OutFile $vsix
+          Add-Type -AssemblyName System.IO.Compression.FileSystem
+          $zip = [IO.Compression.ZipFile]::OpenRead($vsix)
+          try {
+            $entry = $zip.GetEntry("extension/extension.js")
+            if (-not $entry) { throw "extension/extension.js is not in the VSIX" }
+            $js = Join-Path $env:RUNNER_TEMP "extension.js"
+            [IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $js, $true)
+          } finally { $zip.Dispose() }
+          "CLAUDE_EXT_JS=$js" >> $env:GITHUB_ENV
+
+      - name: Check the /open route
+        run: dotnet test tests/ClaudeStatusBar.Tests -c Release -p:Offline=true --filter "FullyQualifiedName~CLAUDE_EXT_JS"
