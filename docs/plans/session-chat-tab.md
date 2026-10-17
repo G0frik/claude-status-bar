@@ -1,6 +1,6 @@
 # Open the session's chat tab, not just its window
 
-**Status:** in progress · **Tracked in:** [ROADMAP.md](../../ROADMAP.md)
+**Status:** done (0.4.0) · **Tracked in:** [ROADMAP.md](../../ROADMAP.md)
 
 ## Context
 
@@ -152,7 +152,8 @@ The user ran these on 2026-10-17, with five sessions across two windows:
 | Q1: session in the back of two windows | Works: the right window comes forward on the right tab, and no copy of the session appears in the other window. |
 | Q4: editor minimized | Works. A scripted run with the window minimized also passed (tab in 63 ms). `AllowSetForegroundWindow` isn't needed. |
 | Q6: "Don't ask again" after restarting the editor | Kept. |
-| Q2: a CLI session in the editor's terminal | _not run yet_ |
+| Q2: a CLI session in the editor's terminal | Left alone: the window comes forward and the log says `skip:not-panel`. |
+| VS Code 1.107.1, extension 2.1.301 | Works, the same as in Antigravity. |
 
 `open.log` showed **17 launches (6–34 ms to decide) and 4 `skip:not-in-front`** in that
 session. Two of the skipped sessions were opened again 4 s and 27 s later, which looks like a
@@ -163,3 +164,7 @@ second click after the tab didn't switch. The first build checked the foreground
 - names what is in front when it still isn't ("another window of the editor" or "another app").
 
 The next skips will show which case it is. The minimized case wasn't the cause (above).
+
+With that build, in Antigravity and VS Code: 12 launches, the window in front within 0–1 ms each
+time, and no `not-in-front` skip. The cause of the first 4 skips wasn't found. If it happens
+again, the log line now says which case it was.

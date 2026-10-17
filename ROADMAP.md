@@ -6,9 +6,7 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Planned
 
-- **Open the session's chat tab** (S): when several sessions share one editor window, a click
-  switches to that session's tab, through the Claude Code extension's `/open` URI. Works in any
-  VS Code-based editor. Design: [docs/plans/session-chat-tab.md](docs/plans/session-chat-tab.md)
+Nothing in progress; pick from the ideas below.
 
 ## Ideas
 
@@ -32,6 +30,9 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Done
 
+- **Open the session's chat tab** (0.4.0): when several sessions share one editor window, a
+  click switches to that session's tab, through the Claude Code extension's `/open` URI. Works
+  in any VS Code-based editor. Design: [docs/plans/session-chat-tab.md](docs/plans/session-chat-tab.md)
 - **Open a session from the widget** (0.3.0): click a dot, a panel row, or the widget to bring
   that session's window to the front; the sessions panel lists every session.
   Design: [docs/plans/session-open-and-notifications.md](docs/plans/session-open-and-notifications.md)
