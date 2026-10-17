@@ -28,6 +28,12 @@ public sealed class Settings
     public int UsageRefreshMinutes { get; set; } = 5;
 #endif
 
+    /// <summary>
+    /// When opening a session that runs in an editor's Claude Code panel, also switch that window
+    /// to the session's chat tab (through the extension's /open URI), not just bring it forward.
+    /// </summary>
+    public bool OpenChatTab { get; set; } = true;
+
     /// <summary>Show notifications at all; the two below choose which.</summary>
     public bool ShowNotifications { get; set; } = true;
     public bool NotifyPermission { get; set; } = true;

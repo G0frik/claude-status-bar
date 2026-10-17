@@ -31,6 +31,16 @@ public class SessionWindowsTests
     }
 
     [Fact]
+    public void The_chain_names_the_session_its_parent_and_the_window_owner()
+    {
+        var windows = new Windows(Win(1, 23160, "claude-status-bar - Antigravity IDE", 5));
+        var chain = SessionWindows.ResolveChain(14944, "claude-status-bar", Antigravity, windows)!;
+        Assert.Equal(14944, chain.SessionPid);
+        Assert.Equal(16340, chain.ParentPid);   // the extension host
+        Assert.Equal(23160, chain.Window.Pid);  // the editor's main process
+    }
+
+    [Fact]
     public void With_several_editor_windows_the_one_naming_the_project_wins()
     {
         var windows = new Windows(
