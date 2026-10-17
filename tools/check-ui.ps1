@@ -15,6 +15,12 @@
   open: puts another window (Notepad) in front, left-clicks the widget (-At label or dot), and
   checks that the foreground window becomes the session's window (title matching -ExpectTitle).
 
+  opentab: the same click, for a session in an editor's Claude Code panel, with another tab of
+  that window active beforehand. Passes when the foreground window's title shows the session's
+  tab (-ExpectTab) within -WaitSeconds, and reports how long that took. VS Code-based editors put
+  the active tab's name in the window title (the default window.title); their tabs aren't
+  visible to UI Automation.
+
   Saves screenshots on request and restores the cursor. Exits 0 on PASS, 1 on FAIL.
 
 .EXAMPLE
@@ -22,13 +28,15 @@
   .\tools\check-ui.ps1 -Target panel -ExpectRows 4 -Screenshot panel.png
   .\tools\check-ui.ps1 -Target menu
   .\tools\check-ui.ps1 -Target open -At label -ExpectTitle "claude-status-bar"
+  .\tools\check-ui.ps1 -Target opentab -At dot -ExpectTab "say hi" -WaitSeconds 8
   .\tools\check-ui.ps1 -Target notify -WaitSeconds 60   # with simulate-sessions.js running
 #>
 param(
-    [ValidateSet("usage", "panel", "menu", "open", "notify")] [string]$Target = "usage",
+    [ValidateSet("usage", "panel", "menu", "open", "opentab", "notify")] [string]$Target = "usage",
     [int]$ExpectRows = 0,
     [ValidateSet("label", "dot")] [string]$At = "label",
     [string]$ExpectTitle = "",
+    [string]$ExpectTab = "",
     [double]$WaitSeconds = 3,
     [string]$Screenshot = "",
     # Another screenshot 2.5 s later with the popup still open, to see its timers advance.
@@ -95,7 +103,7 @@ $point = switch ($Target) {
     "usage" { [System.Drawing.Point]::new($right - [int](6 * $scale), $midY) }
     "panel" { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
     "menu"  { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
-    "open"  {
+    { $_ -in "open", "opentab" } {
         if ($At -eq "dot") { [System.Drawing.Point]::new($right - [int]((17 + 7) * $scale), $midY) }
         else { [System.Drawing.Point]::new($right - [int](120 * $scale), $midY) }
     }
@@ -131,6 +139,35 @@ if ($Target -eq "notify") {
     Write-Host "$(if ($ok) { 'PASS' } else { 'FAIL' }) (notify)"
     Write-Host "  polls with a notification: $seen; most at once: $most; not aligned with the pill: $misaligned"
     if ($stolen) { Write-Host "  foreground changed to: $($stolen -join ', ')" }
+    if ($ok) { exit 0 } else { exit 1 }
+}
+
+if ($Target -eq "opentab") {
+    if (-not $ExpectTab) { Write-Host "FAIL: -ExpectTab is required"; exit 1 }
+    $original = [System.Windows.Forms.Cursor]::Position
+    $other = Start-Process notepad -PassThru
+    $after = ""; $elapsed = $null
+    try {
+        Start-Sleep -Milliseconds 1200
+        $before = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+        [System.Windows.Forms.Cursor]::Position = $point
+        Start-Sleep -Milliseconds 150
+        $clock = [Diagnostics.Stopwatch]::StartNew()
+        [ZOrder]::mouse_event(0x0002, 0, 0, 0, [IntPtr]::Zero); [ZOrder]::mouse_event(0x0004, 0, 0, 0, [IntPtr]::Zero)
+        while ($clock.Elapsed.TotalSeconds -lt $WaitSeconds) {
+            $after = [ZOrder]::Title([ZOrder]::GetForegroundWindow())
+            if ($after -like "*$ExpectTab*") { $elapsed = $clock.ElapsedMilliseconds; break }
+            Start-Sleep -Milliseconds 50
+        }
+    }
+    finally {
+        [System.Windows.Forms.Cursor]::Position = $original
+        Stop-Process -Id $other.Id -Force -ErrorAction SilentlyContinue
+    }
+    $ok = $null -ne $elapsed
+    Write-Host "$(if ($ok) { "PASS (opentab, clicked $At, tab shown after $elapsed ms)" } else { "FAIL (opentab, clicked $At, tab not shown within $WaitSeconds s)" })"
+    Write-Host "  foreground before: $before"
+    Write-Host "  foreground after:  $after"
     if ($ok) { exit 0 } else { exit 1 }
 }
 
