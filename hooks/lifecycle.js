@@ -10,6 +10,7 @@ const os = require("os");
 const path = require("path");
 const cp = require("child_process");
 const { writeJsonAtomic } = require("./atomic");
+const { widgetEnv } = require("./widgetenv");
 
 const EXE = "ClaudeStatusBar.exe";
 const dir = path.join(os.homedir(), ".claude", "statusbar");
@@ -39,7 +40,7 @@ function launch() {
   let exe = "";
   try { exe = fs.readFileSync(exePathFile, "utf8").trim(); } catch {}
   if (!exe || !fs.existsSync(exe)) return;
-  const child = cp.spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true });
+  const child = cp.spawn(exe, [], { detached: true, stdio: "ignore", windowsHide: true, env: widgetEnv(process.env) });
   child.unref();
 }
 

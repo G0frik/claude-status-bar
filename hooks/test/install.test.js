@@ -15,7 +15,7 @@ test("install copies every hook script, including the shared helper", (t) => {
   const home = tempHome(); t.after(() => rmHome(home));
   writeSettings(home, {});
   assert.equal(runHook(home, "install.js").status, 0);
-  for (const f of ["update.js", "lifecycle.js", "statusline.js", "atomic.js"])
+  for (const f of ["update.js", "lifecycle.js", "statusline.js", "atomic.js", "widgetenv.js"])
     assert.ok(fs.existsSync(path.join(sbDir(home), f)), `${f} copied`);
 });
 
