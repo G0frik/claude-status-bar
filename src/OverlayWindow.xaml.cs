@@ -115,21 +115,9 @@ public partial class OverlayWindow : Window
 
     private Color IconColor => Brand;
 
-    private double Fps => _settings.Style switch
-    {
-        AnimStyle.Spark => 9,
-        AnimStyle.Code => 5 * 18 / 3.8,
-        AnimStyle.Crab => 12.5,
-        _ => 9,
-    };
+    private double Fps => _settings.Style == AnimStyle.Crab ? 12.5 : 9;
 
-    private int FrameCount => _settings.Style switch
-    {
-        AnimStyle.Spark => IconRenderer.SparkFrameCount,
-        AnimStyle.Code => 5 * 18,
-        AnimStyle.Crab => IconRenderer.CrabFrameCount,
-        _ => IconRenderer.SparkFrameCount,
-    };
+    private int FrameCount => _settings.Style == AnimStyle.Crab ? IconRenderer.CrabFrameCount : IconRenderer.SparkFrameCount;
 
     private IntPtr _hwnd;
 
@@ -705,8 +693,7 @@ public partial class OverlayWindow : Window
         MiNotifyPermission.IsChecked = _settings.NotifyPermission;
         MiNotifyFinished.IsChecked = _settings.NotifyFinished;
         MiNotifyPermission.IsEnabled = MiNotifyFinished.IsEnabled = _settings.ShowNotifications;
-        MiStyleSpark.IsChecked = _settings.Style == AnimStyle.Spark;
-        MiStyleCode.IsChecked = _settings.Style == AnimStyle.Code;
+        MiStyleSpark.IsChecked = _settings.Style != AnimStyle.Crab;
         MiStyleCrab.IsChecked = _settings.Style == AnimStyle.Crab;
         MiVersion.Header = $"Version {AppVersion} · {BuildInfo.Variant}";
     }
@@ -806,7 +793,6 @@ public partial class OverlayWindow : Window
     }
 
     private void OnStyleSpark(object sender, RoutedEventArgs e) => SetStyle(AnimStyle.Spark);
-    private void OnStyleCode(object sender, RoutedEventArgs e) => SetStyle(AnimStyle.Code);
     private void OnStyleCrab(object sender, RoutedEventArgs e) => SetStyle(AnimStyle.Crab);
 
     private void SetStyle(AnimStyle style)

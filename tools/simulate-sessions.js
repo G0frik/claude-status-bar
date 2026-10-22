@@ -8,8 +8,7 @@
 // Usage: node tools/simulate-sessions.js [--sessions 8] [--seconds 60] [--min-ms 50] [--max-ms 500]
 //                                        [--long-turns] [--home <dir>]
 // --long-turns keeps every turn going for at least 25 s, so finishing it notifies.
-// Without --home it writes to your real ~/.claude/statusbar, where a running widget shows it;
-// the widget must be running then, or lifecycle.js would clear the existing session files.
+// Without --home it writes to your real ~/.claude/statusbar, where the widget shows it.
 
 const fs = require("fs");
 const os = require("os");
@@ -29,14 +28,6 @@ const MIN_TURN_MS = 25000;
 const HOOKS = path.join(__dirname, "..", "hooks");
 const SB_DIR = path.join(HOME, ".claude", "statusbar");
 const PROJECTS = ["alpha", "beta", "gamma", "alpha", "delta", "beta"]; // repeats test name numbering
-
-if (!args.home) {
-  const out = cp.execSync('tasklist /FI "IMAGENAME eq ClaudeStatusBar.exe" /NH', { encoding: "utf8" });
-  if (!out.includes("ClaudeStatusBar.exe")) {
-    console.error("The widget isn't running; start it first (or pass --home <dir> to simulate elsewhere).");
-    process.exit(2);
-  }
-}
 
 const env = { ...process.env, USERPROFILE: HOME, HOME, CLAUDE_STATUSBAR_DEBUG: "1" };
 const stats = { sessionsStarted: 0, sessionsEnded: 0, events: 0, hookFailures: 0, byEvent: {} };

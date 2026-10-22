@@ -141,6 +141,30 @@ public class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void Deletes_the_file_of_a_session_whose_process_is_gone()
+    {
+        _dir.WriteSession("crashed", new { state = "thinking", project = "proj", ts = Now, pid = 111 });
+        _dir.WriteSession("live", new { state = "thinking", project = "proj", ts = Now, pid = 222 });
+        _dir.WriteSession("older-hooks", Status("thinking")); // no pid: never checked
+        var store = new SessionStore(_dir.Path, () => _now, gone: pid => pid == 111);
+
+        Assert.Equal(["live", "older-hooks"], store.Poll().Select(s => s.SessionId).Order());
+        Assert.False(File.Exists(System.IO.Path.Combine(_dir.Sessions, "crashed")));
+    }
+
+    [Fact]
+    public void A_process_is_gone_once_it_exits_or_when_its_id_belongs_to_another_program()
+    {
+        Assert.False(Native.HasExited(Environment.ProcessId));
+        Assert.True(SessionStore.ProcessGone(Environment.ProcessId), "the test host is neither claude nor node");
+
+        // The Process object keeps a handle, so this also covers an exited process that still has one.
+        using var p = System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo("cmd.exe", "/c exit") { CreateNoWindow = true })!;
+        p.WaitForExit();
+        Assert.True(Native.HasExited(p.Id));
+    }
+
+    [Fact]
     public void Nothing_tracked_means_no_sessions_at_all()
     {
         var store = NewStore();
@@ -167,6 +191,34 @@ public class SessionStoreTests : IDisposable
         _dir.WriteSession("a", Status("thinking", transcript: transcript));
 
         Assert.Equal("idle", Assert.Single(NewStore().Poll()).State);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_session_shown_idle_after_an_interruption_or_silence_keeps_its_transcript(bool interrupted)
+    {
+        // Clicking it opens its chat tab only while its conversation is known.
+        var transcript = System.IO.Path.Combine(_dir.Path, "t.jsonl");
+        File.WriteAllText(transcript, interrupted ? "{\"text\":\"[Request interrupted by user]\"}\n" : "{\"a\":1}\n");
+        double ts = interrupted ? Now : Now - StateStore.StaleActiveSeconds - 1;
+        _dir.WriteSession("a", Status("thinking", ts: ts, transcript: transcript));
+
+        var s = Assert.Single(NewStore().Poll());
+        Assert.Equal("idle", s.State);
+        Assert.True(SessionStore.HasConversation(s));
+    }
+
+    [Theory]
+    [InlineData("{\"type\":\"user\",\"message\":{\"content\":\"why was it interrupted by user?\"}}")]
+    [InlineData("{\"toolUseResult\":{\"stdout\":\"LastLineContains(t, \\\"text\\\":\\\"[Request interrupted by user\\\")\"}}")]
+    public void The_words_quoted_in_a_prompt_or_tool_result_are_no_interruption(string lastLine)
+    {
+        var transcript = System.IO.Path.Combine(_dir.Path, "t.jsonl");
+        File.WriteAllText(transcript, lastLine + "\n");
+        _dir.WriteSession("a", Status("thinking", transcript: transcript));
+
+        Assert.Equal("thinking", Assert.Single(NewStore().Poll()).State);
     }
 
     [Fact]

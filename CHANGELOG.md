@@ -15,8 +15,26 @@ All notable changes to this project are documented here. The format is based on
   session transcript at the end of each turn (new `background.js`, installed with the other
   hooks).
 
+### Changed
+
+- The **Claude Code** animation is gone from the menu: it was the Claude Spark animation, only
+  faster. A saved choice of it now shows Claude Spark.
+
 ### Fixed
 
+- A session whose Claude Code process is gone (a crash, a killed terminal) no longer stays as a
+  dot for up to 12 hours or keeps the widget from quitting: the widget deletes its status file.
+  Sessions starting at the same moment no longer delete each other's files, and `lifecycle.js`
+  no longer runs `tasklist`.
+- A session keeps the project name it started with. It used to follow every `cd` Claude ran,
+  which could also open the wrong editor window on a click.
+- Clicking a session whose last turn was interrupted, or that went quiet for 15 minutes, switches
+  the editor to its chat tab again. It used to only bring the window forward (`open.log`:
+  `skip:no-conversation`), because the idle status shown for it had lost its transcript path.
+- Only Claude Code's own interruption marker ends a turn early. The words "interrupted by user"
+  in a prompt or a tool result no longer make a working session look idle.
+- Setup and uninstall replace `~/.claude/settings.json` atomically, so a cut-off write can't
+  leave it half written.
 - Spare sessions that the VS Code extension starts in the background, which no chat tab shows,
   no longer appear as idle sessions. Clicking one used to make the extension open a new empty
   session. A session is now shown from its first prompt (`lifecycle.js` records the transcript

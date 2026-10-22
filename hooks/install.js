@@ -8,19 +8,14 @@
 // Usage: node install.js [path\to\ClaudeStatusBar.exe]
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
+const { sbDir, settingsPath, isOurStatusLine, withoutOurs, saveSettings } = require("./claudesettings");
 
-const home = os.homedir();
-const sbDir = path.join(home, ".claude", "statusbar");
-const MARKER = sbDir; // every hook command we add points inside this dir
 const updateDest = path.join(sbDir, "update.js");
 const lifecycleDest = path.join(sbDir, "lifecycle.js");
 const statuslineDest = path.join(sbDir, "statusline.js");
 const chainPath = path.join(sbDir, "statusline-chain.json"); // the user's own statusLine, if any
-const settingsPath = path.join(home, ".claude", "settings.json");
 const exePathFile = path.join(sbDir, "app-path.txt");
-const node = process.execPath;
 
 fs.mkdirSync(sbDir, { recursive: true });
 fs.copyFileSync(path.join(__dirname, "update.js"), updateDest);
@@ -52,19 +47,12 @@ if (fs.existsSync(settingsPath)) {
 }
 settings.hooks = settings.hooks || {};
 
-// Ours in either form: shell form (older installs) names the script in `command`, exec form in `args`.
-const isOurHook = (h) => [h.command, ...(h.args || [])].some((s) => String(s || "").includes(MARKER));
-const stripOurs = (arr) =>
-  (arr || [])
-    .map((entry) => ({ ...entry, hooks: (entry.hooks || []).filter((h) => !isOurHook(h)) }))
-    .filter((entry) => (entry.hooks || []).length > 0);
-
 const addUnmatched = (evt, hook) => {
-  settings.hooks[evt] = stripOurs(settings.hooks[evt]);
+  settings.hooks[evt] = withoutOurs(settings.hooks[evt]);
   settings.hooks[evt].push({ hooks: [{ type: "command", ...hook }] });
 };
 const addMatched = (evt, hook) => {
-  settings.hooks[evt] = stripOurs(settings.hooks[evt]);
+  settings.hooks[evt] = withoutOurs(settings.hooks[evt]);
   settings.hooks[evt].push({ matcher: "*", hooks: [{ type: "command", ...hook }] });
 };
 
@@ -81,12 +69,11 @@ addUnmatched("SessionEnd", life("end"));
 
 // Status line (feeds the usage bars). A statusLine that isn't ours is saved and chained after
 // ours, so the user's own status line keeps rendering. On a re-run the saved one is reused.
-const isOurs = (sl) => !!sl && (sl.command || "").includes(MARKER);
 let chained = null;
-if (settings.statusLine && !isOurs(settings.statusLine)) {
+if (settings.statusLine && !isOurStatusLine(settings.statusLine)) {
   chained = settings.statusLine;
   fs.writeFileSync(chainPath, JSON.stringify(chained, null, 2) + "\n");
-} else if (isOurs(settings.statusLine)) {
+} else if (isOurStatusLine(settings.statusLine)) {
   try { chained = JSON.parse(fs.readFileSync(chainPath, "utf8")); } catch {}
 } else {
   fs.rmSync(chainPath, { force: true });
@@ -98,7 +85,7 @@ settings.statusLine = {
   command: chained && chained.command ? `${statusCmd} --tee | ${chained.command}` : statusCmd,
 };
 
-fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+saveSettings(settings);
 console.log("Installed status-bar hooks into", settingsPath);
 console.log("Scripts:", updateDest, lifecycleDest, "and", statuslineDest);
 if (chained) console.log("Existing statusLine kept (chained after ours); saved to", chainPath);
