@@ -10,6 +10,11 @@ namespace ClaudeStatusBar;
 /// Empty files (written by hooks older than per-session status) are skipped; when nothing
 /// parseable remains, callers fall back to state.json. Idle, finished or background-waiting
 /// sessions with no event for <see cref="LeftoverSeconds"/> are hidden: those are left behind by crashed sessions.
+///
+/// Idle sessions that have never had a conversation (no transcript yet) are hidden too. The
+/// editor extension starts spare sessions that no chat tab shows, and there is nothing to open in
+/// one: the extension answers a link to an unknown session by starting a new one. A session
+/// shows up with its first prompt.
 /// </summary>
 public sealed class SessionStore
 {
@@ -29,6 +34,16 @@ public sealed class SessionStore
         _dir = Path.Combine(dir ?? StateStore.Dir, "sessions.d");
         _now = now ?? StateStore.UnixNow;
     }
+
+    /// <summary>Whether the last poll found any session status, shown or hidden.</summary>
+    public bool AnyTracked { get; private set; }
+
+    /// <summary>
+    /// Whether the session has a conversation: true once its transcript exists, false while it
+    /// doesn't, null when its transcript isn't known (a status written by older hooks).
+    /// </summary>
+    public static bool? HasConversation(ClaudeState s) =>
+        string.IsNullOrEmpty(s.Transcript) ? null : File.Exists(s.Transcript);
 
     public IReadOnlyList<ClaudeState> Poll()
     {
@@ -55,11 +70,13 @@ public sealed class SessionStore
             if (state is not null) _cache[file] = new Entry(lastWrite, state, cached?.Order ?? _order++);
         }
 
+        AnyTracked = _cache.Count > 0;
         double now = _now();
         return _cache.Values
             .OrderBy(e => e.Order)
             .Select(e => StateStore.Effective(e.State, now))
             .Where(s => !(s.State is "idle" or "done" or "background" && now - s.Ts > LeftoverSeconds))
+            .Where(s => !(s.State == "idle" && HasConversation(s) == false))
             .ToList();
     }
 

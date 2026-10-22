@@ -91,7 +91,9 @@ function run() {
     if (!exists) {
       const project = p.cwd ? path.basename(p.cwd) : "";
       // pid: with exec-form hooks the parent process is the session's Claude Code process.
-      const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts: Math.floor(Date.now() / 1000), pid: process.ppid };
+      // transcript: the file appears with the first prompt; until then the widget hides the
+      // session (the editor extension starts spare sessions that no chat tab shows).
+      const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", transcript: p.transcript_path || "", startedAt: 0, ts: Math.floor(Date.now() / 1000), pid: process.ppid };
       try { writeJsonAtomic(sessPath, entry, dir); } catch {} // temp file outside sessions.d
     } else if (p.source === "startup" || p.source === "resume") {
       clearBackground(sessPath);

@@ -198,7 +198,8 @@ public partial class OverlayWindow : Window
         if (_openPopups == 0) AssertTopmost();
 
         var sessions = _sessions.Poll();
-        if (sessions.Count == 0) sessions = [_store.Poll()]; // hooks without per-session status
+        // Nothing shown: all sessions are hidden (resting), or the hooks write no per-session status.
+        if (sessions.Count == 0) sessions = [_sessions.AnyTracked ? new ClaudeState() : _store.Poll()];
         _sessionsNow = sessions;
         var state = SessionFocus.Pick(sessions, _focusId)!;
         if (state.SessionId != _focusId) { _focusId = state.SessionId; _verbStartedAt = 0; }
