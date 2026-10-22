@@ -8,7 +8,8 @@ namespace ClaudeStatusBar;
 /// session's chat tab when it's safe: the window really is in front (the editor delivers a URI
 /// to its last focused window, and a URI landing in another window would start a second copy of
 /// the session there), the session runs in the extension's panel, and the extension has the
-/// /open route. Anything else leaves things as they were: the window in front.
+/// /open route, and the session has a conversation (the extension answers a link to a session it
+/// doesn't know by starting a new one). Anything else leaves things as they were: the window in front.
 /// </summary>
 public static class ChatTabOpener
 {
@@ -23,6 +24,7 @@ public static class ChatTabOpener
     public static void Open(ClaudeState session, SessionChain? chain, bool activated)
     {
         var id = session.SessionId;
+        if (SessionStore.HasConversation(session) != true) { OpenLog.Write($"{id} skip:no-conversation"); return; }
         if (chain is null) { OpenLog.Write($"{id} skip:no-chain"); return; }
         if (!activated) { OpenLog.Write($"{id} skip:not-in-front (refused)"); return; }
         if (!Recent.TryEnter(id)) { OpenLog.Write($"{id} skip:repeat"); return; }

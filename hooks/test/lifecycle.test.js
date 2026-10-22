@@ -22,6 +22,12 @@ test("start registers the session as an idle JSON entry with its project", (t) =
 // whether a real ClaudeStatusBar.exe happens to run on the machine.
 const NO_WIDGET = { PATH: path.dirname(process.execPath) };
 
+test("start records the transcript path, so the widget can tell a session that has no conversation yet", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "lifecycle.js", ["start"], payload("s1", { transcript_path: "C:\\x\\s1.jsonl" }));
+  assert.equal(readJson(path.join(sessDir(home), "s1")).transcript, "C:\\x\\s1.jsonl");
+});
+
 test("start on resume or compaction keeps the session's current status", (t) => {
   const home = tempHome(); t.after(() => rmHome(home));
   runHook(home, "lifecycle.js", ["start"], payload("s1"), NO_WIDGET);

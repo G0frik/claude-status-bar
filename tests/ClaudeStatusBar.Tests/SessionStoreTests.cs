@@ -119,6 +119,47 @@ public class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void Idle_sessions_without_a_conversation_yet_are_hidden_but_still_tracked()
+    {
+        // A spare session the editor extension started: its transcript doesn't exist yet.
+        var missing = System.IO.Path.Combine(_dir.Path, "spare.jsonl");
+        var existing = System.IO.Path.Combine(_dir.Path, "resumed.jsonl");
+        File.WriteAllText(existing, "{}");
+        _dir.WriteSession("spare", Status("idle", transcript: missing));
+        var store = NewStore();
+
+        Assert.Empty(store.Poll());
+        Assert.True(store.AnyTracked, "the widget rests instead of falling back to state.json");
+
+        _dir.WriteSession("resumed", Status("idle", transcript: existing));
+        _dir.WriteSession("older-hooks", Status("idle"));
+        Assert.Equal(["resumed", "older-hooks"], store.Poll().Select(s => s.SessionId).OrderByDescending(id => id == "resumed"));
+
+        File.WriteAllText(missing, "{}"); // its first prompt
+        _dir.WriteSession("spare", Status("thinking", transcript: missing));
+        Assert.Contains("spare", store.Poll().Select(s => s.SessionId));
+    }
+
+    [Fact]
+    public void Nothing_tracked_means_no_sessions_at_all()
+    {
+        var store = NewStore();
+        Assert.Empty(store.Poll());
+        Assert.False(store.AnyTracked);
+    }
+
+    [Theory]
+    [InlineData("", null)]
+    [InlineData("missing.jsonl", false)]
+    [InlineData("present.jsonl", true)]
+    public void A_conversation_is_known_by_its_transcript(string file, bool? expected)
+    {
+        File.WriteAllText(System.IO.Path.Combine(_dir.Path, "present.jsonl"), "{}");
+        var transcript = file.Length == 0 ? "" : System.IO.Path.Combine(_dir.Path, file);
+        Assert.Equal(expected, SessionStore.HasConversation(new ClaudeState { Transcript = transcript }));
+    }
+
+    [Fact]
     public void Active_session_whose_transcript_ends_with_an_interruption_is_idle()
     {
         var transcript = System.IO.Path.Combine(_dir.Path, "t.jsonl");
