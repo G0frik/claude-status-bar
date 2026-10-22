@@ -235,7 +235,7 @@ internal sealed class SessionsPanel
             _dot.StrokeThickness = session.SessionId == focusId ? 1 : 0;
             SetText(_name, name);
             SetText(_status, SessionText.Status(session));
-            SetText(_timer, session.State is "thinking" or "tool" && session.StartedAt > 0 ? SessionText.Duration(now - session.StartedAt) : "");
+            SetText(_timer, session.State is "thinking" or "tool" or "background" && session.StartedAt > 0 ? SessionText.Duration(now - session.StartedAt) : "");
         }
 
         public void Hide()

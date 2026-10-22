@@ -8,8 +8,8 @@ namespace ClaudeStatusBar;
 /// first seen, so their dots keep their places. Each entry's SessionId is its file name.
 ///
 /// Empty files (written by hooks older than per-session status) are skipped; when nothing
-/// parseable remains, callers fall back to state.json. Idle or finished sessions with no event
-/// for <see cref="LeftoverSeconds"/> are hidden: those are left behind by crashed sessions.
+/// parseable remains, callers fall back to state.json. Idle, finished or background-waiting
+/// sessions with no event for <see cref="LeftoverSeconds"/> are hidden: those are left behind by crashed sessions.
 /// </summary>
 public sealed class SessionStore
 {
@@ -59,7 +59,7 @@ public sealed class SessionStore
         return _cache.Values
             .OrderBy(e => e.Order)
             .Select(e => StateStore.Effective(e.State, now))
-            .Where(s => !(s.State is "idle" or "done" && now - s.Ts > LeftoverSeconds))
+            .Where(s => !(s.State is "idle" or "done" or "background" && now - s.Ts > LeftoverSeconds))
             .ToList();
     }
 
@@ -79,7 +79,8 @@ public sealed class SessionStore
 
 /// <summary>
 /// Chooses the session the main icon, label and timer follow: the one that most needs attention
-/// (awaiting permission, then working, then just finished, then idle). Focus is sticky: the
+/// (awaiting permission, then working, then waiting on background tasks, then just finished,
+/// then idle). Focus is sticky: the
 /// current session keeps it while it is still in the highest class present, so a session that
 /// starts working later doesn't take over the display.
 /// </summary>
@@ -87,8 +88,9 @@ public static class SessionFocus
 {
     public static int Rank(string state) => state switch
     {
-        "permission" => 3,
-        "thinking" or "tool" => 2,
+        "permission" => 4,
+        "thinking" or "tool" => 3,
+        "background" => 2,
         "done" => 1,
         _ => 0,
     };
@@ -128,6 +130,7 @@ public static class SessionText
         "thinking" => "Thinking…",
         "tool" => string.IsNullOrEmpty(s.Label) ? "Working…" : s.Label,
         "permission" => string.IsNullOrEmpty(s.Detail) ? "Awaiting permission" : $"Awaiting permission · {PermissionSubject(s.Detail)}",
+        "background" => string.IsNullOrEmpty(s.Label) ? "Background tasks" : s.Label,
         "done" => "Done",
         _ => "Idle",
     };

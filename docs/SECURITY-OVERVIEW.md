@@ -34,6 +34,7 @@ doesn't use; the checks above are on the app's own code.
 | `.claude\statusbar\win-settings.json` | app | Its own settings. |
 | `.claude.json` | app, every 15 s when the file changes | Claude Code's cached plan usage. The whole file is parsed; only the `cachedUsageUtilization` key is used. Nothing else is kept or logged. |
 | The session transcript named by a session's status, normally `.claude\projects\…\*.jsonl` | app, while a session is busy | Last 8 KB only, to see whether the user interrupted the turn. |
+| The session transcript named in the hook input | `update.js` (`background.js`), at the end of each turn | Read from where the previous turn's read stopped, to count background tasks still running. Only task ids, their timeouts and their end notices are kept, in the session's status file. |
 | `<editor install>\resources\app\product.json` | app, on a click only | The `urlProtocol` of the editor that runs a clicked Claude Code panel session (e.g. `vscode`). Nothing else is used. |
 | `<editor data folder>\extensions\anthropic.claude-code-*\extension.js` | app, once per extension version | Checked for the extension's `/open` link before using it; read-only, nothing kept but yes/no. |
 | `.claude\statusbar\app-path.txt` | `lifecycle.js` | Path of the exe to launch. |
@@ -45,7 +46,7 @@ doesn't use; the checks above are on the app's own code.
 
 | Path | By | Notes |
 |---|---|---|
-| `.claude\statusbar\sessions.d\<session id>`, `state.json` | `update.js`, `lifecycle.js` | Status per session; deleted when the session ends. |
+| `.claude\statusbar\sessions.d\<session id>`, `state.json` | `update.js`, `lifecycle.js` | Status per session, including the ids of background tasks still running and how far the transcript was read; deleted when the session ends. |
 | `.claude\statusbar\usage.json` | app, `statusline.js` | Plan usage percentages and reset times. |
 | `.claude\statusbar\win-settings.json` | app | Menu choices. |
 | `usage.log` next to `ClaudeStatusBar.exe` | app | Where usage numbers came from (percentages, sources, HTTP status codes). Capped at 512 KB. Not written if the folder is read-only. |
@@ -53,7 +54,7 @@ doesn't use; the checks above are on the app's own code.
 | `%TEMP%\ClaudeStatusBar.completion.mp3` | app | Completion chime, extracted from the exe on first use. |
 | `.claude\statusbar\hooks.log` | app, hooks | Only when `CLAUDE_STATUSBAR_DEBUG=1` is set. |
 | `.claude\statusbar\*.tmp` | app, hooks | Short-lived; atomic writes are a temp file renamed over the target. |
-| `.claude\statusbar\{update,lifecycle,statusline,atomic,widgetenv}.js`, `app-path.txt`, `statusline-chain.json` | `install.js` | Installed hook scripts, the exe path, and the user's previous statusLine. |
+| `.claude\statusbar\{update,lifecycle,statusline,atomic,widgetenv,background}.js`, `app-path.txt`, `statusline-chain.json` | `install.js` | Installed hook scripts, the exe path, and the user's previous statusLine. |
 | `.claude\settings.json`, `.claude\settings.json.bak-statusbar` | `install.js`, `uninstall.js` | Hook entries; a one-time backup before the first change. |
 
 ## Processes started

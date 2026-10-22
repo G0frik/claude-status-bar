@@ -37,6 +37,16 @@ public class SessionTransitionsTests
     }
 
     [Fact]
+    public void Ending_a_turn_with_background_tasks_left_is_not_finishing()
+    {
+        var t = new SessionTransitions();
+        t.Update([S("a", "thinking")]);
+        Assert.Empty(t.Update([S("a", "background")]));
+        Assert.Empty(t.Update([S("a", "tool")]));                               // woken by a task's notification
+        Assert.Equal([(SessionEventKind.Finished, "a")], Kinds(t.Update([S("a", "done", 600)])));
+    }
+
+    [Fact]
     public void Each_session_is_tracked_separately()
     {
         var t = new SessionTransitions();

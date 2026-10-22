@@ -27,6 +27,7 @@ fs.copyFileSync(path.join(__dirname, "update.js"), updateDest);
 fs.copyFileSync(path.join(__dirname, "lifecycle.js"), lifecycleDest);
 fs.copyFileSync(path.join(__dirname, "statusline.js"), statuslineDest);
 fs.copyFileSync(path.join(__dirname, "atomic.js"), path.join(sbDir, "atomic.js")); // shared by the above
+fs.copyFileSync(path.join(__dirname, "background.js"), path.join(sbDir, "background.js")); // used by update.js
 fs.copyFileSync(path.join(__dirname, "widgetenv.js"), path.join(sbDir, "widgetenv.js")); // used by lifecycle.js
 
 // Record the exe location for the launcher. Prefer an explicit arg; else guess next to install.js.

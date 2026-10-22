@@ -110,6 +110,15 @@ public class SessionStoreTests : IDisposable
     }
 
     [Fact]
+    public void Background_tasks_can_run_past_the_stale_timeout()
+    {
+        // A build or a Monitor left running sends no hook events until it ends.
+        _dir.WriteSession("a", Status("background", ts: Now - StateStore.StaleActiveSeconds - 1));
+
+        Assert.Equal("background", Assert.Single(NewStore().Poll()).State);
+    }
+
+    [Fact]
     public void Active_session_whose_transcript_ends_with_an_interruption_is_idle()
     {
         var transcript = System.IO.Path.Combine(_dir.Path, "t.jsonl");
@@ -120,11 +129,12 @@ public class SessionStoreTests : IDisposable
     }
 
     [Fact]
-    public void Hides_idle_and_done_leftovers_after_12_hours_but_not_recent_ones()
+    public void Hides_idle_done_and_background_leftovers_after_12_hours_but_not_recent_ones()
     {
         double old = Now - SessionStore.LeftoverSeconds - 1;
         _dir.WriteSession("old-idle", Status("idle", ts: old));
         _dir.WriteSession("old-done", Status("done", ts: old));
+        _dir.WriteSession("old-background", Status("background", ts: old));
         _dir.WriteSession("recent-idle", Status("idle", ts: Now - 60));
 
         Assert.Equal("recent-idle", Assert.Single(NewStore().Poll()).SessionId);

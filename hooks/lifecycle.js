@@ -44,13 +44,26 @@ function launch() {
   child.unref();
 }
 
+// Background tasks belong to the Claude Code process that started them. A session started again
+// in a new process (startup or resume, unlike compaction) has none running, whatever its status
+// file says; Claude Code reports them as stopped in the transcript, which nothing reads until the
+// next Stop. Clear them now so the session doesn't wait on them until then.
+function clearBackground(sessPath) {
+  try {
+    const prev = JSON.parse(fs.readFileSync(sessPath, "utf8"));
+    if (prev.state !== "background") return;
+    const bg = prev.bg ? { offset: prev.bg.offset, tasks: {} } : undefined;
+    writeJsonAtomic(sessPath, { ...prev, state: "idle", label: "", startedAt: 0, bg, ts: Math.floor(Date.now() / 1000) }, dir);
+  } catch {}
+}
+
 // Reset the status to idle when the owning session ends without a Stop event. The session-id
 // check ensures a different session's active turn is left untouched.
 function clearStaleState(id) {
   try {
     const prev = JSON.parse(fs.readFileSync(statePath, "utf8"));
     if (safeId(prev.sessionId) !== id) return;
-    if (!["thinking", "tool", "permission"].includes(prev.state)) return;
+    if (!["thinking", "tool", "permission", "background"].includes(prev.state)) return;
     writeJsonAtomic(statePath, { ...prev, state: "idle", label: "", startedAt: 0, ts: Math.floor(Date.now() / 1000) });
   } catch {}
 }
@@ -80,6 +93,8 @@ function run() {
       // pid: with exec-form hooks the parent process is the session's Claude Code process.
       const entry = { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts: Math.floor(Date.now() / 1000), pid: process.ppid };
       try { writeJsonAtomic(sessPath, entry, dir); } catch {} // temp file outside sessions.d
+    } else if (p.source === "startup" || p.source === "resume") {
+      clearBackground(sessPath);
     }
     clearStaleState(id);
     launch();
