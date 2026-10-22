@@ -20,6 +20,8 @@ public class SessionFocusTests
     [InlineData("permission", "thinking")]
     [InlineData("permission", "tool")]
     [InlineData("thinking", "done")]
+    [InlineData("thinking", "background")]
+    [InlineData("background", "done")]
     [InlineData("tool", "idle")]
     [InlineData("done", "idle")]
     public void Higher_priority_state_wins(string winner, string loser)
@@ -71,9 +73,10 @@ public class SessionFocusTests
     [Fact]
     public void Ranks_cover_every_state()
     {
-        Assert.Equal(3, SessionFocus.Rank("permission"));
-        Assert.Equal(2, SessionFocus.Rank("thinking"));
-        Assert.Equal(2, SessionFocus.Rank("tool"));
+        Assert.Equal(4, SessionFocus.Rank("permission"));
+        Assert.Equal(3, SessionFocus.Rank("thinking"));
+        Assert.Equal(3, SessionFocus.Rank("tool"));
+        Assert.Equal(2, SessionFocus.Rank("background"));
         Assert.Equal(1, SessionFocus.Rank("done"));
         Assert.Equal(0, SessionFocus.Rank("idle"));
         Assert.Equal(0, SessionFocus.Rank("something-new"));
@@ -112,6 +115,8 @@ public class SessionTextTests
     [InlineData("permission", "", "", "Awaiting permission")]
     [InlineData("permission", "", "Bash", "Awaiting permission · Bash")]
     [InlineData("permission", "", "Claude needs your permission to use Write", "Awaiting permission · Write")]
+    [InlineData("background", "2 background tasks", "", "2 background tasks")]
+    [InlineData("background", "", "", "Background tasks")]
     [InlineData("done", "", "", "Done")]
     [InlineData("idle", "", "", "Idle")]
     [InlineData("whatever", "", "", "Idle")]

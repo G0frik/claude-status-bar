@@ -8,7 +8,7 @@ namespace ClaudeStatusBar;
 /// </summary>
 public sealed class ClaudeState
 {
-    public string State { get; set; } = "idle"; // idle | thinking | tool | permission | done
+    public string State { get; set; } = "idle"; // idle | thinking | tool | permission | background | done
     public string Label { get; set; } = "";
     public string Tool { get; set; } = "";
     public string Project { get; set; } = "";

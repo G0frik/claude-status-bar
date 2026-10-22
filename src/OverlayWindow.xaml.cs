@@ -19,6 +19,7 @@ public partial class OverlayWindow : Window
 {
     private static readonly Color Brand = Color.FromRgb(0xD9, 0x77, 0x57); // Anthropic accent
     private static readonly Color Amber = Color.FromRgb(0xF2, 0xBA, 0x2E); // awaiting-permission dot
+    private static readonly Color Blue = Color.FromRgb(0x5B, 0xA4, 0xE6);  // background-tasks dot
 
     private const double TrayMarginDip = 8;   // gap between the widget and the tray cluster
     private const double VerticalInset = 6;    // total top+bottom gap inside the taskbar band
@@ -33,6 +34,7 @@ public partial class OverlayWindow : Window
     private static readonly Brush UsageFill = Frozen(Color.FromRgb(0xC0, 0xC0, 0xC0)); // timer text color
     private static readonly Brush UsageWarnFill = Frozen(Brand);
     private static readonly Brush DotPermission = Frozen(Amber);
+    private static readonly Brush DotBackground = Frozen(Blue);
     private static readonly Brush DotIdle = Frozen(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
     private static readonly Brush DotFocusRing = Frozen(Color.FromArgb(0xE0, 0xFF, 0xFF, 0xFF));
 
@@ -217,7 +219,12 @@ public partial class OverlayWindow : Window
             case "permission":
                 _verbStartedAt = 0;
                 _startedAt = 0;
-                Render("Awaiting permission", animate: false, dot: true);
+                Render("Awaiting permission", animate: false, dot: Amber);
+                break;
+            case "background":
+                // The turn ended but tasks it started still run: not finished, so the timer keeps going.
+                _verbStartedAt = 0;
+                Render(SessionText.Status(state), animate: false, dot: Blue);
                 break;
             default:
                 _verbStartedAt = 0;
@@ -285,7 +292,7 @@ public partial class OverlayWindow : Window
 
     // ----- rendering -----
 
-    private void Render(string label, bool animate, bool dot = false)
+    private void Render(string label, bool animate, Color? dot = null)
     {
         StatusText.Text = label;
         if (animate)
@@ -296,7 +303,7 @@ public partial class OverlayWindow : Window
         {
             _animating = false;
             _frame = 0;
-            IconImg.Source = dot ? IconRenderer.Dot(Amber) : RestingIcon();
+            IconImg.Source = dot is { } color ? IconRenderer.Dot(color) : RestingIcon();
         }
     }
 
@@ -338,12 +345,13 @@ public partial class OverlayWindow : Window
 
     // ----- session dots -----
 
-    private enum DotKind { Idle, Working, Permission }
+    private enum DotKind { Idle, Working, Permission, Background }
 
     private static DotKind KindOf(string state) => state switch
     {
         "thinking" or "tool" => DotKind.Working,
         "permission" => DotKind.Permission,
+        "background" => DotKind.Background,
         _ => DotKind.Idle,
     };
 
@@ -396,6 +404,7 @@ public partial class OverlayWindow : Window
     {
         DotKind.Working => _dotWorking,
         DotKind.Permission => DotPermission,
+        DotKind.Background => DotBackground,
         _ => DotIdle,
     };
 
@@ -443,7 +452,7 @@ public partial class OverlayWindow : Window
             Width = DotSize, Height = DotSize,
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Center,
-            Fill = kind switch { DotKind.Working => _dotWorking, DotKind.Permission => DotPermission, _ => DotIdle },
+            Fill = kind switch { DotKind.Working => _dotWorking, DotKind.Permission => DotPermission, DotKind.Background => DotBackground, _ => DotIdle },
             Stroke = focused ? DotFocusRing : null,
             StrokeThickness = focused ? 1 : 0,
             IsHitTestVisible = false,

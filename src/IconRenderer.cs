@@ -55,7 +55,7 @@ internal static class IconRenderer
     public static ImageSource Crab(int frame)
         => CrabSprites.Length > 0 ? CrabSprites[frame % CrabSprites.Length] : LogoMask;
 
-    /// <summary>Filled dot used for the awaiting-permission state.</summary>
+    /// <summary>Filled dot used for the awaiting-permission and background-tasks states.</summary>
     public static ImageSource Dot(Color color)
     {
         if (Rendered.TryGetValue((null, color), out var cached)) return cached;
