@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- A session whose turn ended while background tasks it started are still running (background
+  shell commands, Monitor watches, background subagents) is shown as waiting on them — a blue dot
+  and `N background tasks` — instead of done. The timer keeps running, and the "finished"
+  notification and chime come when the last task ends. `update.js` counts the tasks from the
+  session transcript at the end of each turn (new `background.js`, installed with the other
+  hooks).
+
 ## [0.4.0] - 2026-10-17
 
 ### Added

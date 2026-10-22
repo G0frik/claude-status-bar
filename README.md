@@ -26,13 +26,16 @@ taskbar and resizes itself so it never overlaps the notification tray.
 - **Thinking** — the icon animates with a rotating activity word and a live `1m 1s` timer.
 - **Running a tool** — a label such as `Editing`, `Reading`, `Running command`, or `Searching`.
 - **Awaiting permission** — a paused yellow dot.
+- **Background tasks** — a blue dot and `2 background tasks` when a turn ends but work it started
+  (background shell commands, Monitor watches, background subagents) is still running. The timer
+  keeps going, and the session counts as finished only when the last task ends.
 - **Idle / done** — rests on the Claude mark.
 - **Usage limits** — two thin bars at the right edge, after the timer: your 5-hour (left) and weekly (right)
   claude.ai plan usage. A bar turns orange at 80%; hover for exact percentages and reset times.
   Shown for Pro and Max subscribers once a session has had its first response; hidden otherwise.
 - **Several sessions** — with two or more Claude Code sessions (terminals or VS Code chat tabs),
   a small dot per session appears after the timer: orange (pulsing) while working, yellow while
-  awaiting permission, grey when idle. The icon, label and timer follow one session, ringed among
+  awaiting permission, blue while background tasks run, grey when idle. The icon, label and timer follow one session, ringed among
   the dots: the one awaiting permission first, otherwise the one already shown, so a session that
   starts working later doesn't take over. Beyond five sessions the dots end in `+N`. Rest the mouse
   on the dots to open a panel listing every session (project, status, timer); the row of the dot
