@@ -113,8 +113,9 @@ public sealed class StateStore
 
     /// <summary>
     /// The state to display: an active state with no event for <see cref="StaleActiveSeconds"/>,
-    /// or whose transcript ends with an interruption marker, is idle. Ts is kept, so the time of
-    /// the last real event stays known.
+    /// or whose transcript ends with an interruption marker, is idle. What identifies the session
+    /// is kept (its transcript tells a click that it has a conversation to open), and so is Ts, so
+    /// the time of the last real event stays known.
     /// </summary>
     internal static ClaudeState Effective(ClaudeState s, double now)
     {
@@ -123,7 +124,7 @@ public sealed class StateStore
             if (now - s.Ts > StaleActiveSeconds ||
                 (!string.IsNullOrEmpty(s.Transcript) && LastLineContains(s.Transcript, InterruptionMarker)))
             {
-                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Ts = s.Ts, Pid = s.Pid };
+                return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Transcript = s.Transcript, Ts = s.Ts, Pid = s.Pid };
             }
         }
         return s;

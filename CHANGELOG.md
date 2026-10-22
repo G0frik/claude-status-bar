@@ -28,6 +28,9 @@ All notable changes to this project are documented here. The format is based on
   no longer runs `tasklist`.
 - A session keeps the project name it started with. It used to follow every `cd` Claude ran,
   which could also open the wrong editor window on a click.
+- Clicking a session whose last turn was interrupted, or that went quiet for 15 minutes, switches
+  the editor to its chat tab again. It used to only bring the window forward (`open.log`:
+  `skip:no-conversation`), because the idle status shown for it had lost its transcript path.
 - Only Claude Code's own interruption marker ends a turn early. The words "interrupted by user"
   in a prompt or a tool result no longer make a working session look idle.
 - Setup and uninstall replace `~/.claude/settings.json` atomically, so a cut-off write can't

@@ -194,6 +194,22 @@ public class SessionStoreTests : IDisposable
     }
 
     [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void A_session_shown_idle_after_an_interruption_or_silence_keeps_its_transcript(bool interrupted)
+    {
+        // Clicking it opens its chat tab only while its conversation is known.
+        var transcript = System.IO.Path.Combine(_dir.Path, "t.jsonl");
+        File.WriteAllText(transcript, interrupted ? "{\"text\":\"[Request interrupted by user]\"}\n" : "{\"a\":1}\n");
+        double ts = interrupted ? Now : Now - StateStore.StaleActiveSeconds - 1;
+        _dir.WriteSession("a", Status("thinking", ts: ts, transcript: transcript));
+
+        var s = Assert.Single(NewStore().Poll());
+        Assert.Equal("idle", s.State);
+        Assert.True(SessionStore.HasConversation(s));
+    }
+
+    [Theory]
     [InlineData("{\"type\":\"user\",\"message\":{\"content\":\"why was it interrupted by user?\"}}")]
     [InlineData("{\"toolUseResult\":{\"stdout\":\"LastLineContains(t, \\\"text\\\":\\\"[Request interrupted by user\\\")\"}}")]
     public void The_words_quoted_in_a_prompt_or_tool_result_are_no_interruption(string lastLine)
