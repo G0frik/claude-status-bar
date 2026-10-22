@@ -6,7 +6,10 @@ or community-requested items can also become a GitHub issue (use the feature req
 
 ## Planned
 
-Nothing in progress; pick from the ideas below.
+- **Phone notifications through ntfy** (M): an opt-in push when a session needs permission or
+  finishes and nobody answered at the PC within a minute. Online build only, unguessable
+  topic, no session details in the message. Claude Code's own mobile push is unreliable
+  (anthropics/claude-code#87003). Design: [docs/plans/phone-notifications.md](docs/plans/phone-notifications.md)
 
 ## Ideas
 
