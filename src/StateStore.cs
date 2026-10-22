@@ -107,6 +107,10 @@ public sealed class StateStore
         };
     }
 
+    // Claude Code's own text block. The same words quoted in a prompt or a tool result don't match:
+    // there the key's quotes are escaped (\"text\":) or the text doesn't start the value.
+    private const string InterruptionMarker = "\"text\":\"[Request interrupted by user";
+
     /// <summary>
     /// The state to display: an active state with no event for <see cref="StaleActiveSeconds"/>,
     /// or whose transcript ends with an interruption marker, is idle. Ts is kept, so the time of
@@ -117,7 +121,7 @@ public sealed class StateStore
         if (s.State is "thinking" or "tool" or "permission")
         {
             if (now - s.Ts > StaleActiveSeconds ||
-                (!string.IsNullOrEmpty(s.Transcript) && LastLineContains(s.Transcript, "interrupted by user")))
+                (!string.IsNullOrEmpty(s.Transcript) && LastLineContains(s.Transcript, InterruptionMarker)))
             {
                 return new ClaudeState { State = "idle", Project = s.Project, SessionId = s.SessionId, Ts = s.Ts, Pid = s.Pid };
             }

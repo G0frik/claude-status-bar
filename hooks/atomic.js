@@ -9,14 +9,14 @@ const path = require("path");
 const RETRYABLE = new Set(["EPERM", "EBUSY", "EACCES"]);
 const sleep = (ms) => Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
 
-// Write obj as JSON to file. The temp file goes in tmpDir (default: next to file), which must be
-// on the same volume; pass another directory when file's own directory is watched for entries.
+// Write text to file. The temp file goes in tmpDir (default: next to file), which must be on the
+// same volume; pass another directory when file's own directory is watched for entries.
 // Throws if the write ultimately fails.
-function writeJsonAtomic(file, obj, tmpDir = path.dirname(file)) {
+function writeFileAtomic(file, text, tmpDir = path.dirname(file)) {
   fs.mkdirSync(path.dirname(file), { recursive: true });
   fs.mkdirSync(tmpDir, { recursive: true });
   const tmp = path.join(tmpDir, `${path.basename(file)}.${process.pid}.tmp`);
-  fs.writeFileSync(tmp, JSON.stringify(obj));
+  fs.writeFileSync(tmp, text);
   for (let attempt = 1; ; attempt++) {
     try {
       fs.renameSync(tmp, file);
@@ -31,4 +31,6 @@ function writeJsonAtomic(file, obj, tmpDir = path.dirname(file)) {
   }
 }
 
-module.exports = { writeJsonAtomic };
+const writeJsonAtomic = (file, obj, tmpDir) => writeFileAtomic(file, JSON.stringify(obj), tmpDir);
+
+module.exports = { writeFileAtomic, writeJsonAtomic };

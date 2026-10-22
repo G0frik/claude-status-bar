@@ -89,7 +89,7 @@ Right-click the widget to open its menu:
   also show its tab (on by default; see [Switching to the chat tab](#switching-to-the-chat-tab)).
 - **Notifications** — turn notifications off, or choose which: when a session needs permission,
   when a turn finishes.
-- **Animation** — Claude Spark, Claude Code, or Crab Walking.
+- **Animation** — Claude Spark or Crab Walking.
 - **Show on** — choose which monitors display the widget (defaults to the primary monitor).
 - **Version** — the version and build variant (`offline` or `online`).
 - **Quit** — close the widget; it returns on your next Claude Code session.

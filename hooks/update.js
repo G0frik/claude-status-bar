@@ -49,7 +49,8 @@ process.stdin.on("end", () => {
   let prev = {};
   try { prev = JSON.parse(fs.readFileSync(sessPath || statePath, "utf8")); } catch {}
 
-  const project = p.cwd ? path.basename(p.cwd) : prev.project || "";
+  // The name the session started with: cwd follows every `cd` Claude runs in its shell.
+  const project = prev.project || (p.cwd ? path.basename(p.cwd) : "");
   const ts = Math.floor(Date.now() / 1000);
 
   // Track the session so one that predates the hook install is still counted, even when this

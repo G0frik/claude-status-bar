@@ -57,6 +57,13 @@ test("two sessions keep separate statuses and timers", (t) => {
   assert.equal(readJson(path.join(sbDir(home), "state.json")).sessionId, "b", "state.json holds the latest event");
 });
 
+test("the session keeps its project name when Claude changes directory", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "update.js", ["prompt"], payload("s1"));
+  runHook(home, "update.js", ["pre"], payload("s1", { cwd: "C:\\work\\my-project\\src", tool_name: "Bash" }));
+  assert.equal(session(home, "s1").project, "my-project");
+});
+
 test("a pre event for a fresh session doesn't inherit another session's start time", (t) => {
   const home = tempHome(); t.after(() => rmHome(home));
   // Session a's old turn start sits in state.json.

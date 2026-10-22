@@ -12,7 +12,6 @@ const cp = require("child_process");
 const { writeJsonAtomic } = require("./atomic");
 const { widgetEnv } = require("./widgetenv");
 
-const EXE = "ClaudeStatusBar.exe";
 const dir = path.join(os.homedir(), ".claude", "statusbar");
 const sessDir = path.join(dir, "sessions.d");
 const statePath = path.join(dir, "state.json");
@@ -24,14 +23,6 @@ fs.mkdirSync(sessDir, { recursive: true });
 function debugLog(line) {
   if (process.env.CLAUDE_STATUSBAR_DEBUG !== "1") return;
   try { fs.appendFileSync(path.join(dir, "hooks.log"), `${new Date().toISOString()} [lifecycle:${event}] ${line}\n`); } catch {}
-}
-
-// Whether ClaudeStatusBar.exe is currently running.
-function running() {
-  try {
-    const out = cp.execSync(`tasklist /FI "IMAGENAME eq ${EXE}" /NH`, { encoding: "utf8" });
-    return out.includes(EXE);
-  } catch { return false; }
 }
 
 const safeId = (s) => String(s || "").replace(/[^A-Za-z0-9_.-]/g, "").slice(0, 64) || "unknown";
@@ -81,9 +72,10 @@ function run() {
   const id = safeId(p.session_id);
 
   if (event === "start") {
-    // When the app is not running, other sessions' leftover files are stale; clear them first.
-    // This session's own file stays: on resume or compaction it holds the current status.
-    if (!running()) { try { for (const f of fs.readdirSync(sessDir)) if (f !== id) fs.rmSync(path.join(sessDir, f), { force: true }); } catch {} }
+    // Empty files are leftovers of hooks older than per-session status (these hooks never write
+    // one). Other sessions' files stay, even when several start at once: the widget removes the
+    // file of a session whose process is gone.
+    try { for (const f of fs.readdirSync(sessDir)) if (f !== id && fs.statSync(path.join(sessDir, f)).size === 0) fs.rmSync(path.join(sessDir, f), { force: true }); } catch {}
     // SessionStart also fires on resume and compaction; keep an existing entry's status.
     const sessPath = path.join(sessDir, id);
     let exists = false;

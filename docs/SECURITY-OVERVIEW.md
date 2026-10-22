@@ -46,16 +46,16 @@ doesn't use; the checks above are on the app's own code.
 
 | Path | By | Notes |
 |---|---|---|
-| `.claude\statusbar\sessions.d\<session id>`, `state.json` | `update.js`, `lifecycle.js` | Status per session, including the ids of background tasks still running and how far the transcript was read; deleted when the session ends. |
+| `.claude\statusbar\sessions.d\<session id>`, `state.json` | `update.js`, `lifecycle.js`, app | Status per session, including the ids of background tasks still running and how far the transcript was read; deleted when the session ends, or by the app once the session's recorded process is gone. |
 | `.claude\statusbar\usage.json` | app, `statusline.js` | Plan usage percentages and reset times. |
 | `.claude\statusbar\win-settings.json` | app | Menu choices. |
 | `usage.log` next to `ClaudeStatusBar.exe` | app | Where usage numbers came from (percentages, sources, HTTP status codes). Capped at 512 KB. Not written if the folder is read-only. |
 | `open.log` next to `ClaudeStatusBar.exe` | app | One line per click that tried to switch to a session's chat tab: session id, the decision, the editor's URL scheme and extension folder name. No window titles. Capped at 512 KB. |
 | `%TEMP%\ClaudeStatusBar.completion.mp3` | app | Completion chime, extracted from the exe on first use. |
 | `.claude\statusbar\hooks.log` | app, hooks | Only when `CLAUDE_STATUSBAR_DEBUG=1` is set. |
-| `.claude\statusbar\*.tmp` | app, hooks | Short-lived; atomic writes are a temp file renamed over the target. |
+| `.claude\statusbar\*.tmp`, `.claude\settings.json.<pid>.tmp` | app, hooks, `install.js`, `uninstall.js` | Short-lived; atomic writes are a temp file renamed over the target. |
 | `.claude\statusbar\{update,lifecycle,statusline,atomic,widgetenv,background}.js`, `app-path.txt`, `statusline-chain.json` | `install.js` | Installed hook scripts, the exe path, and the user's previous statusLine. |
-| `.claude\settings.json`, `.claude\settings.json.bak-statusbar` | `install.js`, `uninstall.js` | Hook entries; a one-time backup before the first change. |
+| `.claude\settings.json`, `.claude\settings.json.bak-statusbar` | `install.js`, `uninstall.js` | Hook entries, replaced atomically; a one-time backup before the first change. |
 
 ## Processes started
 
@@ -63,7 +63,6 @@ doesn't use; the checks above are on the app's own code.
 |---|---|---|
 | Claude Code | `node <…>\.claude\statusbar\update.js <event>`; `lifecycle.js start/end` | On each hook event. Exec form, no shell. |
 | Claude Code | `node <…>\statusline.js` (or `… --tee \| <your previous statusLine>`) | Terminal status line refreshes; through Claude Code's shell. |
-| `lifecycle.js` | `tasklist /FI "IMAGENAME eq ClaudeStatusBar.exe" /NH` (via `cmd`) | Session start: is the widget already running? |
 | `lifecycle.js` | the exe named in `app-path.txt`, detached and hidden, without the session's `ELECTRON_*`, `VSCODE_*` and `CLAUDE_CODE_*` variables (`widgetenv.js`) | Session start, if not running. |
 | `uninstall.js` | `taskkill /IM ClaudeStatusBar.exe /F` (via `cmd`) | Uninstall. |
 | `setup.bat` / `uninstall.bat` | `where node`, `node --version`, `node hooks\install.js "<exe>"` / `where node`, `node hooks\uninstall.js` | When run by the user. |

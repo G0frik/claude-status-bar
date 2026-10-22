@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 
 namespace ClaudeStatusBar;
 
+/// <summary>Code was the spark sped up; it stays so saved settings still load, and shows as Spark.</summary>
 public enum AnimStyle { Spark, Code, Crab }
 
 /// <summary>

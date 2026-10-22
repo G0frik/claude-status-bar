@@ -159,6 +159,24 @@ internal static class Native
         finally { CloseHandle(process); }
     }
 
+    private const int ERROR_INVALID_PARAMETER = 87; // OpenProcess: no process has this id
+    private const uint STILL_ACTIVE = 259;
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool GetExitCodeProcess(IntPtr process, out uint exitCode);
+
+    /// <summary>
+    /// Whether the process with this id is gone: none has the id, or only an exited one that a
+    /// handle somewhere keeps around. False when it can't be told (e.g. access denied).
+    /// </summary>
+    public static bool HasExited(int pid)
+    {
+        var process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, (uint)pid);
+        if (process == IntPtr.Zero) return Marshal.GetLastPInvokeError() == ERROR_INVALID_PARAMETER;
+        try { return GetExitCodeProcess(process, out uint code) && code != STILL_ACTIVE; }
+        finally { CloseHandle(process); }
+    }
+
     // ----- top-level windows -----
 
     public delegate bool EnumWindowsProc(IntPtr hWnd, IntPtr lParam);

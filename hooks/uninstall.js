@@ -4,14 +4,10 @@
 // The settings backup and the app executable are not touched.
 
 const fs = require("fs");
-const os = require("os");
 const path = require("path");
 const cp = require("child_process");
+const { sbDir, settingsPath, isOurStatusLine, withoutOurs, saveSettings } = require("./claudesettings");
 
-const home = os.homedir();
-const sbDir = path.join(home, ".claude", "statusbar");
-const MARKER = sbDir; // every hook command added by install.js points inside this directory
-const settingsPath = path.join(home, ".claude", "settings.json");
 const chainPath = path.join(sbDir, "statusline-chain.json"); // saved by install.js
 
 try { cp.execSync('taskkill /IM ClaudeStatusBar.exe /F', { stdio: "ignore" }); } catch {}
@@ -21,18 +17,13 @@ if (!fs.existsSync(settingsPath)) {
   process.exit(0);
 }
 
-// Ours in either form: shell form (older installs) names the script in `command`, exec form in `args`.
-const isOurHook = (h) => [h.command, ...(h.args || [])].some((s) => String(s || "").includes(MARKER));
-
 const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
 for (const evt of Object.keys(settings.hooks || {})) {
-  settings.hooks[evt] = (settings.hooks[evt] || [])
-    .map((e) => ({ ...e, hooks: (e.hooks || []).filter((h) => !isOurHook(h)) }))
-    .filter((e) => (e.hooks || []).length > 0);
+  settings.hooks[evt] = withoutOurs(settings.hooks[evt]);
   if (settings.hooks[evt].length === 0) delete settings.hooks[evt];
 }
 
-if (settings.statusLine && (settings.statusLine.command || "").includes(MARKER)) {
+if (isOurStatusLine(settings.statusLine)) {
   let chained = null;
   try { chained = JSON.parse(fs.readFileSync(chainPath, "utf8")); } catch {}
   if (chained) settings.statusLine = chained;
@@ -40,5 +31,5 @@ if (settings.statusLine && (settings.statusLine.command || "").includes(MARKER))
   fs.rmSync(chainPath, { force: true });
 }
 
-fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+saveSettings(settings);
 console.log("Removed status-bar hooks from", settingsPath);

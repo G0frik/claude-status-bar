@@ -8,8 +8,9 @@ namespace ClaudeStatusBar;
 /// first seen, so their dots keep their places. Each entry's SessionId is its file name.
 ///
 /// Empty files (written by hooks older than per-session status) are skipped; when nothing
-/// parseable remains, callers fall back to state.json. Idle, finished or background-waiting
-/// sessions with no event for <see cref="LeftoverSeconds"/> are hidden: those are left behind by crashed sessions.
+/// parseable remains, callers fall back to state.json. A session whose recorded process is gone
+/// has its file deleted. Idle, finished or background-waiting sessions with no event for
+/// <see cref="LeftoverSeconds"/> are hidden: leftovers of crashed sessions that recorded no process.
 ///
 /// Idle sessions that have never had a conversation (no transcript yet) are hidden too. The
 /// editor extension starts spare sessions that no chat tab shows, and there is nothing to open in
@@ -22,6 +23,7 @@ public sealed class SessionStore
 
     private readonly string _dir;
     private readonly Func<double> _now;
+    private readonly Func<int, bool> _gone;
     private readonly Dictionary<string, Entry> _cache = new(StringComparer.OrdinalIgnoreCase);
     private long _order;
 
@@ -29,11 +31,17 @@ public sealed class SessionStore
 
     /// <param name="dir">Status-bar data directory (sessions.d is inside); defaults to <see cref="StateStore.Dir"/>.</param>
     /// <param name="now">Clock in unix seconds; defaults to the system clock.</param>
-    public SessionStore(string? dir = null, Func<double>? now = null)
+    /// <param name="gone">Whether a session's recorded process is gone; defaults to <see cref="ProcessGone"/>.</param>
+    public SessionStore(string? dir = null, Func<double>? now = null, Func<int, bool>? gone = null)
     {
         _dir = Path.Combine(dir ?? StateStore.Dir, "sessions.d");
         _now = now ?? StateStore.UnixNow;
+        _gone = gone ?? ProcessGone;
     }
+
+    /// <summary>The session's Claude Code process has exited, or its id now belongs to another program.</summary>
+    public static bool ProcessGone(int pid) =>
+        Native.HasExited(pid) || Native.ImagePath(pid) is { } exe && !SessionWindows.IsSessionProcess(exe);
 
     /// <summary>Whether the last poll found any session status, shown or hidden.</summary>
     public bool AnyTracked { get; private set; }
@@ -68,6 +76,14 @@ public sealed class SessionStore
             // Null on an empty, partial or unreadable file: keep what we had and retry next poll.
             var state = Read(file);
             if (state is not null) _cache[file] = new Entry(lastWrite, state, cached?.Order ?? _order++);
+        }
+
+        // A crash, a killed terminal, or a hook that finished after SessionEnd leaves the file of a
+        // session that no longer runs. Remove it, as SessionEnd would have, so the widget can quit.
+        foreach (var (file, _) in _cache.Where(kv => kv.Value.State.Pid > 0 && _gone(kv.Value.State.Pid)).ToList())
+        {
+            try { File.Delete(file); } catch { }
+            _cache.Remove(file);
         }
 
         AnyTracked = _cache.Count > 0;

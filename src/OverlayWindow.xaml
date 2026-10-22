@@ -42,7 +42,6 @@
                 <Separator/>
                 <MenuItem Header="Animation" IsEnabled="False"/>
                 <MenuItem x:Name="MiStyleSpark" Header="Claude Spark" IsCheckable="True" Click="OnStyleSpark"/>
-                <MenuItem x:Name="MiStyleCode"  Header="Claude Code"  IsCheckable="True" Click="OnStyleCode"/>
                 <MenuItem x:Name="MiStyleCrab"  Header="Crab Walking" IsCheckable="True" Click="OnStyleCrab"/>
                 <Separator/>
                 <!-- Placeholder keeps the submenu expandable; items are rebuilt when it opens. -->
