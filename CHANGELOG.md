@@ -15,6 +15,14 @@ All notable changes to this project are documented here. The format is based on
   session transcript at the end of each turn (new `background.js`, installed with the other
   hooks).
 
+### Fixed
+
+- Spare sessions that the VS Code extension starts in the background, which no chat tab shows,
+  no longer appear as idle sessions. Clicking one used to make the extension open a new empty
+  session. A session is now shown from its first prompt (`lifecycle.js` records the transcript
+  path; the widget hides an idle session whose transcript doesn't exist yet), and the
+  chat-tab link is sent only for a session that has a conversation.
+
 ## [0.4.0] - 2026-10-17
 
 ### Added
