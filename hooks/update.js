@@ -2,6 +2,8 @@
 // Claude Code hook handler. Reads the hook payload from stdin, maps the event to a status,
 // and atomically writes it to ~/.claude/statusbar/sessions.d/<session_id> (one file per session,
 // so the widget can show several sessions) and to state.json (the latest event of any session).
+// A Stop that leaves background tasks running (see background.js) is reported as "background"
+// rather than "done": the turn ended, but the work it started has not.
 // Usage: node update.js <prompt|pre|post|notify|permreq|stop>
 // Set CLAUDE_STATUSBAR_DEBUG=1 to append every invocation to ~/.claude/statusbar/hooks.log.
 
@@ -9,6 +11,7 @@ const fs = require("fs");
 const os = require("os");
 const path = require("path");
 const { writeJsonAtomic } = require("./atomic");
+const { scanBackground } = require("./background");
 
 const dir = path.join(os.homedir(), ".claude", "statusbar");
 const statePath = path.join(dir, "state.json");
@@ -54,7 +57,9 @@ process.stdin.on("end", () => {
   // With exec-form hooks the parent process is the session's Claude Code process.
   const pid = process.ppid;
   if (sessPath && !prev.state) write(sessPath, { state: "idle", label: "", project, sessionId: p.session_id || "", startedAt: 0, ts, pid });
+  const transcript = p.transcript_path || prev.transcript || "";
   let state = "idle", label = "", detail = "", startedAt = prev.startedAt || 0, lastTurnSeconds = 0;
+  let bg = prev.transcript === transcript ? prev.bg : undefined; // carried between events, updated on stop
 
   switch (event) {
     case "prompt":
@@ -82,11 +87,21 @@ process.stdin.on("end", () => {
     }
     case "permreq":
       state = "permission"; label = "Awaiting permission"; detail = p.tool_name || ""; break;
-    case "stop":
+    case "stop": {
+      bg = scanBackground(transcript, bg);
+      const n = Object.keys(bg.tasks).length;
+      if (n > 0) {
+        // Not finished yet. The turn keeps its start time, so the timer and "finished after"
+        // cover the background work too.
+        state = "background"; label = n === 1 ? "1 background task" : `${n} background tasks`;
+        if (!startedAt) startedAt = ts;
+        break;
+      }
       state = "done"; label = "Done";
       lastTurnSeconds = startedAt ? Math.max(0, ts - startedAt) : 0; // for "finished" notifications
       startedAt = 0;
       break;
+    }
     default:
       return;
   }
@@ -96,9 +111,10 @@ process.stdin.on("end", () => {
     tool: p.tool_name || "",
     project,
     sessionId: p.session_id || "",
-    transcript: p.transcript_path || prev.transcript || "",
+    transcript,
     startedAt, ts,
     pid, detail, lastTurnSeconds,
+    bg,
   };
   if (sessPath) write(sessPath, out);
   write(statePath, out);

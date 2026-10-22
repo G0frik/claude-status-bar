@@ -151,3 +151,44 @@ test("waiting for permission keeps the turn's start, so the whole turn is timed"
   runHook(home, "update.js", ["stop"], payload("s1"));
   assert.ok(session(home, "s1").lastTurnSeconds >= 60);
 });
+
+test("a stop with background tasks still running is not done; the last one ending is", (t) => {
+  const T = require("./transcript");
+  const home = tempHome(); t.after(() => rmHome(home));
+  const transcript = path.join(home, "t.jsonl");
+  fs.writeFileSync(transcript, T.bashLaunch("b1") + "\n" + T.monitorLaunch("m1") + "\n");
+  fs.mkdirSync(sessDir(home), { recursive: true });
+  const now = Math.floor(Date.now() / 1000);
+  fs.writeFileSync(path.join(sessDir(home), "s1"), JSON.stringify({ state: "tool", startedAt: now - 30, ts: now, transcript }));
+  const p = payload("s1", { transcript_path: transcript });
+
+  runHook(home, "update.js", ["stop"], p);
+  let s = session(home, "s1");
+  assert.equal(s.state, "background");
+  assert.equal(s.label, "2 background tasks");
+  assert.equal(s.startedAt, now - 30, "the turn's start is kept while tasks run");
+  assert.equal(s.lastTurnSeconds, 0);
+
+  // Woken by b1's notification: a tool call, then stop with only the Monitor left.
+  fs.appendFileSync(transcript, T.notification("b1", "completed") + "\n");
+  runHook(home, "update.js", ["pre"], { ...p, tool_name: "Read" });
+  assert.deepEqual(Object.keys(session(home, "s1").bg.tasks), ["b1", "m1"], "carried through other events");
+  runHook(home, "update.js", ["stop"], p);
+  s = session(home, "s1");
+  assert.equal(s.state, "background");
+  assert.equal(s.label, "1 background task");
+
+  fs.appendFileSync(transcript, T.notification("m1", "completed") + "\n");
+  runHook(home, "update.js", ["stop"], p);
+  s = session(home, "s1");
+  assert.equal(s.state, "done");
+  assert.equal(s.startedAt, 0);
+  assert.ok(s.lastTurnSeconds >= 30, "finished after the whole job, background included");
+});
+
+test("a stop without a transcript is done as before", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  runHook(home, "update.js", ["prompt"], payload("s1"));
+  runHook(home, "update.js", ["stop"], payload("s1", { transcript_path: path.join(home, "missing.jsonl") }));
+  assert.equal(session(home, "s1").state, "done");
+});

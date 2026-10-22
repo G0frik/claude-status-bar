@@ -30,6 +30,23 @@ test("start on resume or compaction keeps the session's current status", (t) => 
   assert.equal(readJson(path.join(sessDir(home), "s1")).state, "thinking");
 });
 
+test("a resumed session no longer waits on the previous process's background tasks; compaction still does", (t) => {
+  const home = tempHome(); t.after(() => rmHome(home));
+  fs.mkdirSync(sessDir(home), { recursive: true });
+  const file = path.join(sessDir(home), "s1");
+  const waiting = { state: "background", label: "1 background task", startedAt: 100, ts: 200, bg: { offset: 5000, tasks: { b1: 0 } } };
+
+  fs.writeFileSync(file, JSON.stringify(waiting));
+  runHook(home, "lifecycle.js", ["start"], payload("s1", { source: "compact" }), NO_WIDGET);
+  assert.equal(readJson(file).state, "background");
+
+  runHook(home, "lifecycle.js", ["start"], payload("s1", { source: "resume" }), NO_WIDGET);
+  const s = readJson(file);
+  assert.equal(s.state, "idle");
+  assert.equal(s.startedAt, 0);
+  assert.deepEqual(s.bg, { offset: 5000, tasks: {} }, "the transcript isn't read again from the start");
+});
+
 test("start with no widget running clears other sessions' leftover files", (t) => {
   const home = tempHome(); t.after(() => rmHome(home));
   runHook(home, "lifecycle.js", ["start"], payload("crashed"), NO_WIDGET);
