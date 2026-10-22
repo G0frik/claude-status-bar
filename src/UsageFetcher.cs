@@ -165,7 +165,7 @@ public sealed class UsageFetcher : IUsageSource, IDisposable
     }
 
     private static string AppVersion =>
-        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.4.0";
+        System.Reflection.Assembly.GetExecutingAssembly().GetName().Version?.ToString(3) ?? "0.5.0";
 }
 
 /// <summary>

@@ -30,6 +30,9 @@ Nothing in progress; pick from the ideas below.
 
 ## Done
 
+- **Background tasks** (0.5.0): a turn that ends while background shell commands, Monitor
+  watches or background subagents it started still run shows a blue dot and `N background
+  tasks`, and counts as finished only when the last one ends.
 - **Open the session's chat tab** (0.4.0): when several sessions share one editor window, a
   click switches to that session's tab, through the Claude Code extension's `/open` URI. Works
   in any VS Code-based editor. Design: [docs/plans/session-chat-tab.md](docs/plans/session-chat-tab.md)
